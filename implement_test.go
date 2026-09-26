@@ -1,0 +1,111 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/mike-diff/ghafk/internal/harness"
+)
+
+func gitRepo(t *testing.T) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "t@t"}, {"config", "user.name", "t"}, {"commit", "-q", "--allow-empty", "-m", "base"}} {
+		if _, err := run(dir, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	head, err := run(dir, "git", "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir, head
+}
+
+func TestWorkChangesSeesEditsAndWorkerCommits(t *testing.T) {
+	dir, base := gitRepo(t)
+	if _, changed, err := workChanges(dir, base); err != nil || changed {
+		t.Fatalf("untouched worktree: changed=%v err=%v", changed, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, changed, err := workChanges(dir, base)
+	if err != nil || !changed || status == "" {
+		t.Fatalf("uncommitted edit: status=%q changed=%v err=%v", status, changed, err)
+	}
+	if err := commitChanges(dir, status, "feat: add a", "Closes #5"); err != nil {
+		t.Fatal(err)
+	}
+	status, changed, err = workChanges(dir, base)
+	if err != nil || !changed || status != "" {
+		t.Fatalf("a commit made by the worker itself still counts as a change: status=%q changed=%v err=%v", status, changed, err)
+	}
+	msg, _ := run(dir, "git", "log", "-1", "--format=%B")
+	if msg != "feat: add a\n\nCloses #5" {
+		t.Fatalf("commit message %q", msg)
+	}
+}
+
+func TestCommitChangesSkipsACleanTree(t *testing.T) {
+	dir, base := gitRepo(t)
+	if err := commitChanges(dir, "", "feat: nothing"); err != nil {
+		t.Fatal(err)
+	}
+	if head, _ := run(dir, "git", "rev-parse", "HEAD"); head != base {
+		t.Fatal("a clean tree produced a commit")
+	}
+}
+
+func gitClone(t *testing.T) string {
+	t.Helper()
+	origin := t.TempDir()
+	if _, err := run(origin, "git", "init", "-q", "--bare", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := gitRepo(t)
+	for _, args := range [][]string{{"branch", "-M", "main"}, {"remote", "add", "origin", origin}, {"push", "-q", "origin", "main"}} {
+		if _, err := run(src, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return src
+}
+
+func runIssueWith(t *testing.T, repo, worker string) []ghCall {
+	t.Helper()
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "repo view") {
+			return "main", nil
+		}
+		return "", nil
+	})
+	wf := workflow{label: "agent", worker: harness.Role{Command: worker}, timeout: time.Minute}
+	if err := runIssue(t.TempDir(), repo, "demo", "owner", wf, "## Change\n\nx", issue{Number: 5, Title: "add x"}); err != nil {
+		t.Fatalf("runIssue returned an error, so the next tick runs the worker again: %v", err)
+	}
+	return *calls
+}
+
+func TestWorkerWithoutChangesParks(t *testing.T) {
+	calls := runIssueWith(t, gitClone(t), "true")
+	if !called(calls, "issue edit 5 --add-label needs-human --remove-label agent") {
+		t.Fatalf("a worker that changed nothing was requeued instead of parked, so it reruns every tick: %v", calls)
+	}
+}
+
+func TestRejectedPushParks(t *testing.T) {
+	repo := gitClone(t)
+	for _, args := range [][]string{{"checkout", "-q", "-b", "agent/5"}, {"commit", "-q", "--allow-empty", "-m", "left over"}, {"push", "-q", "origin", "agent/5"}, {"checkout", "-q", "main"}, {"branch", "-q", "-D", "agent/5"}} {
+		if _, err := run(repo, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls := runIssueWith(t, repo, "echo x > x.txt")
+	if !called(calls, "issue edit 5 --add-label needs-human --remove-label agent") {
+		t.Fatalf("a rejected push was not parked, so the worker reruns every tick: %v", calls)
+	}
+}

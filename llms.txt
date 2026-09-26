@@ -1,0 +1,24 @@
+# ghafk
+
+> ghafk (GH AFK) works GitHub issues while you are away from the keyboard. A timer on your machine gives each issue labeled `agent` to a coding agent, runs your checks, asks a second agent to judge the diff against a contract, and merges the pull request. GitHub is the only state.
+
+ghafk is a single Go binary for Linux (systemd) and macOS (launchd). Each repository is configured by `.ghafk/WORKFLOW.md`, and each machine by `~/.ghafk/config`. People steer it with slash commands in issue comments: `/start`, `/answer`, `/retry`, `/close`, `/stop`. Agents run with the user's credentials, so read the security model before you register a repository.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/mike-diff/ghafk/main/README.md): what ghafk does, how an issue moves from label to merge, and the quick start
+- [Configuration](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/configuration.md): every command, machine setting, WORKFLOW.md key, label, harness profile and file
+- [Prompts](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/prompts.md): what each agent is told, in which order, and how to replace a prompt
+- [Writing issues](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/writing-issues.md): how to write an issue that gives a correct pull request
+- [Troubleshooting](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/troubleshooting.md): causes and fixes for issues that do not start, park, or do not merge
+- [Security model](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/security.md): what ghafk prevents and what it leaves to you
+
+## Agents
+
+- [ghafk skill](https://raw.githubusercontent.com/mike-diff/ghafk/main/skills/ghafk/SKILL.md): instructions for an agent that installs, configures or operates ghafk
+
+## Optional
+
+- [GitHub App](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/github-app.md): show ghafk as a bot and limit its token to each repository
+- [Security policy](https://raw.githubusercontent.com/mike-diff/ghafk/main/SECURITY.md): how to report a vulnerability
+- [License](https://raw.githubusercontent.com/mike-diff/ghafk/main/LICENSE): MIT
