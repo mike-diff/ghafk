@@ -103,9 +103,7 @@ func workRepo(home, repo, login string, henv harness.Env) error {
 	}
 	is := issues[pick]
 	if needsApproval(is, openCard(repo, is, login).st) {
-		stepf(base, is.Number, "needs approval")
-		spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: "Someone without write access opened this issue.", body: "A maintainer must read the title and description, then comment `/start`. ghafk works only that exact text. If the text changes later, ghafk stops and needs a new `/start`.", footer: approvalFooter()}
-		return park(parkPlace{repo: repo, base: base, login: login, label: wf.label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments}, "approval needed", spec)
+		return parkForApproval(repo, base, login, wf.label, is)
 	}
 	if contractText(is.Comments, login) != "" && !staleAfterContract(is.Comments, login) {
 		if err := runIssue(home, repo, base, login, wf, contractText(is.Comments, login), is); err != nil {
@@ -117,6 +115,12 @@ func workRepo(home, repo, login string, henv harness.Env) error {
 		return fmt.Errorf("#%d: %w", is.Number, err)
 	}
 	return nil
+}
+
+func parkForApproval(repo, base, login, label string, is issue) error {
+	stepf(base, is.Number, "needs approval")
+	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: "Someone without write access opened this issue.", body: "A maintainer must read the title and description, then comment `/start`. ghafk works only that exact text. If the text changes later, ghafk stops and needs a new `/start`.", footer: approvalFooter()}
+	return park(parkPlace{repo: repo, base: base, login: login, label: label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments}, "approval needed", spec)
 }
 
 func stepf(base string, n int, name string) {

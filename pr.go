@@ -58,6 +58,9 @@ func workPR(home, repo, base, login string, wf workflow, prs []pr) (bool, error)
 	startWorking(repo, r.issueNum)
 	defer stopWorking(repo, r.issueNum)
 	r.card = openCard(repo, is, login)
+	if needsApproval(is, r.card.st) {
+		return true, parkForApproval(repo, base, login, wf.label, is)
+	}
 	if prURL, err := gh(repo, "pr", "view", r.prNum, "--json", "url", "--jq", ".url"); err == nil {
 		r.card.setPR(prURL)
 	}
