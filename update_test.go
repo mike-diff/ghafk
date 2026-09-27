@@ -11,7 +11,7 @@ func TestUpdateInstallsMainPastTheModuleProxy(t *testing.T) {
 	dir := t.TempDir()
 	record := filepath.Join(dir, "record")
 	fakeGo := "#!/bin/sh\nif [ \"$1\" = env ]; then printf '%s\\n' '" + dir + "' ''; exit 0; fi\n" +
-		"printf '%s GOPROXY=%s\\n' \"$*\" \"$GOPROXY\" >> '" + record + "'\nprintf '#!/bin/sh\\n' > '" + filepath.Join(dir, "ghafk") + "'\n"
+		"printf '%s GOPROXY=%s\\n' \"$*\" \"$GOPROXY\" >> '" + record + "'\nprintf '#!/bin/sh\\n' > '" + filepath.Join(dir, "ghafk") + "'\nchmod +x '" + filepath.Join(dir, "ghafk") + "'\n"
 	if err := os.WriteFile(filepath.Join(dir, "go"), []byte(fakeGo), 0o755); err != nil {
 		t.Fatal(err)
 	}

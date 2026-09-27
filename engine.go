@@ -347,15 +347,15 @@ func engineReplaceToken() error {
 }
 
 func engineStatusView(l engineLayout) error {
-	fmt.Println(sanitizeTerminal(engineServiceState(l)))
-	fmt.Println()
-	data, err := readEngineFile(statusFile(l.home), 1<<20)
-	if os.IsPermission(err) {
+	if _, err := os.Stat(l.config()); os.IsPermission(err) {
 		if reexecWithGroup(l) {
 			return nil
 		}
 		return fmt.Errorf("you cannot read the engine's files yet: log out and in again so that your membership in the %s group applies", l.user)
 	}
+	fmt.Println(sanitizeTerminal(engineServiceState(l)))
+	fmt.Println()
+	data, err := readEngineFile(statusFile(l.home), 1<<20)
 	if os.IsNotExist(err) {
 		fmt.Println("engine: no tick has finished yet")
 		return nil
