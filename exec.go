@@ -106,7 +106,7 @@ func runWithEnv(dir, name string, env []string, args ...string) (string, error) 
 		}
 		args = hardened
 		if env == nil {
-			env = os.Environ()
+			env = withOwnerToken(runEnv())
 		}
 		env = append(append([]string{}, env...), "GIT_CONFIG_NOSYSTEM=1")
 	}

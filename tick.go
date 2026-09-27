@@ -17,6 +17,9 @@ func tick() error {
 	if err != nil {
 		return err
 	}
+	if err := loadEngineEnv(home); err != nil {
+		return err
+	}
 	henv, err := loadHarnessEnv()
 	if err != nil {
 		return err
