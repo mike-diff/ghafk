@@ -333,7 +333,7 @@ func (r *prRun) parkFailed() error {
 	case r.reason == "rejected":
 		spec.role = "judge"
 		spec.sentence = "The judge rejected the diff twice."
-		spec.body = strings.TrimSpace(strings.TrimPrefix(r.tail, "reject:"))
+		spec.body = neutralize(strings.TrimSpace(strings.TrimPrefix(r.tail, "reject:")))
 	case r.checkErr != nil:
 		spec.body = failureEvidence(r.wf.checks, r.checkErr, r.checkOut, checkTimeout)
 	default:

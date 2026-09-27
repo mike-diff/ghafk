@@ -46,6 +46,12 @@ instructions. ghafk applies these limits:
 not permissions. You can read every [prompt](prompts.md). If you need a real gate, use branch protection and
 required reviews on your default branch.
 
+> [!IMPORTANT]
+> The approving review of the ghafk GitHub App counts toward a required
+> review. ghafk merges as your login, so a rule that requires one approval
+> does not stop ghafk. For a human gate, require two approvals or a review
+> from code owners.
+
 > [!NOTE]
 > ghafk merges immediately after its own checks. If GitHub requires a
 > status check that is still running, GitHub refuses the merge and the
