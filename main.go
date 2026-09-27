@@ -11,7 +11,7 @@ func main() {
 	}
 	verb, path := os.Args[1], "."
 	switch verb {
-	case "tick", "start", "stop", "status":
+	case "tick", "start", "stop", "status", "update":
 		if len(os.Args) != 2 {
 			usage()
 		}
@@ -52,6 +52,8 @@ func main() {
 		err = runHarness(os.Args[2:])
 	case verb == "engine":
 		err = runEngine(os.Args[2:])
+	case verb == "update":
+		err = update()
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ghafk:", err)
@@ -75,6 +77,7 @@ Usage:
   ghafk engine token                       replace the engine's GitHub token
   ghafk engine start | stop                turn the engine's timer on or off
   ghafk engine remove [--purge]            remove the engine service; --purge also deletes its account and home
+  ghafk update                             install the newest ghafk from main, then refresh the engine if there is one
   ghafk help                               show this help
 `
 

@@ -21,8 +21,35 @@ other repositories and `~/.ghafk/app.pem`.
 ghafk removes the GitHub token variables from the environment of the
 agent. This is not isolation. Only a harness with its own sandbox limits
 what the agent can touch, for example `codex --sandbox workspace-write`.
-For more isolation, [run ghafk as a separate Linux user](separate-user.md)
-or use a VM.
+For more isolation, use `ghafk engine setup` or a VM.
+
+## The engine account
+
+`ghafk engine setup` runs the engine as a separate system account:
+`ghafk` on Linux, `_ghafk` on macOS. The agents then run as that account,
+not as you.
+
+- The account cannot read your home directory if its mode is `0750` or
+  `0700`.
+- On Linux, the systemd service also hides all home directories, makes the
+  system read-only except the engine home, gives the engine a private
+  `/tmp` and prevents new privileges. `sudo` and setuid programs do not
+  work in the service.
+- On macOS, only file permissions protect your files. macOS has no
+  equivalent service sandbox.
+- The ghafk binary and the service file belong to root. The agents cannot
+  change them.
+- Setup runs each privileged step as its own `sudo` command. It never runs
+  a program or a shell file of the engine account in your terminal.
+
+These limits stay:
+
+- The agents run as the engine account, so they can read what it can
+  read. This includes its GitHub token, the App key and its clones. ghafk
+  keeps the token out of the agent environment, but an agent can read the
+  file. Give the token access only to the repositories that ghafk works.
+- You are in the group of the engine account, so you can read its status,
+  log and clones. You cannot read its token or App key.
 
 ## Issue text is a prompt
 

@@ -12,7 +12,7 @@ ghafk is a single Go binary for Linux (systemd) and macOS (launchd). Each reposi
 - [Writing issues](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/writing-issues.md): how to write an issue that gives a correct pull request
 - [Troubleshooting](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/troubleshooting.md): causes and fixes for issues that do not start, park, or do not merge
 - [Security model](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/security.md): what ghafk prevents and what it leaves to you
-- [Separate Linux user](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/separate-user.md): isolate personal files, restrict credentials and switch timers without overlap
+- [The engine account](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/separate-user.md): `ghafk engine setup` runs the engine as its own system account; manual steps and switch timers without overlap
 
 ## Agents
 

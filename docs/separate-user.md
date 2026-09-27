@@ -1,8 +1,7 @@
-# Run ghafk as a separate Linux user
+# The engine account
 
 Use a dedicated account to limit what coding agents can access.
-This guide uses `ghafk` as the Linux account name.
-The Linux account is separate from your GitHub account and GitHub App.
+The account is separate from your GitHub account and GitHub App.
 
 ## Why use a separate account
 
@@ -18,6 +17,63 @@ Agents can still use that account's credentials, network access and files.
 They can access each repository that its GitHub token permits.
 
 Read the [security model](security.md) before you continue.
+
+## Automatic setup
+
+Run this command from your own account:
+
+```sh
+ghafk engine setup
+```
+
+The command asks for your sudo password once. Then it does these steps:
+
+1. It creates a system account: `ghafk` with the home `/var/lib/ghafk` on
+   Linux, or the hidden account `_ghafk` with the home
+   `/usr/local/var/ghafk` on macOS.
+2. It adds you to the group of the account, so that you can see its status.
+3. It installs the ghafk binary at `/usr/local/bin/ghafk`. Root owns the
+   binary.
+4. It copies your `config`, `harnesses`, `prompts` and GitHub App files.
+5. It asks for a fine-grained GitHub token. It shows a link that fills in
+   the permissions. Select the repositories that ghafk works. The token
+   must belong to the account that opens and merges the pull requests.
+6. It installs a systemd service on Linux, or a LaunchDaemon on macOS, and
+   starts the timer.
+7. It looks for harnesses that the engine can use.
+
+The command never installs a harness. To install one, enter the account in
+a new terminal, install the harness and log in to it, then close that
+terminal:
+
+```sh
+sudo -iu ghafk      # on macOS: sudo -iu _ghafk
+```
+
+Run `ghafk engine setup` again after that. Also run it again after you
+change your `~/.ghafk` files.
+
+Use these commands from your own account:
+
+| Task | Command |
+|---|---|
+| See the engine | `ghafk status` |
+| Update ghafk and the engine | `ghafk update` |
+| Replace the GitHub token | `ghafk engine token` |
+| Stop or start the timer | `ghafk engine stop`, `ghafk engine start` |
+| Remove the engine | `ghafk engine remove`, or `ghafk engine remove --purge` to also delete the account |
+
+After setup, log out and log in again on Linux, or open a new terminal on
+macOS. Then `ghafk status` can read the files of the engine.
+
+The engine cannot use programs in your home directory. Install `gh` and
+`git` system-wide.
+
+## Manual setup
+
+The sections below set up the account by hand. Use them only when
+`ghafk engine setup` cannot do the work, for example on a Linux system
+without systemd.
 
 ## 1. Check the existing installation
 
@@ -272,11 +328,12 @@ You do not need the dedicated account.
 4. Commit `.ghafk/WORKFLOW.md` and push it to the default branch.
 
 The engine finds the repository on its next tick and clones it.
-Run `ghafk status` as the dedicated account to see the repository.
+Run `ghafk status` to see the repository.
 
 ## 10. Update ghafk
 
-Run these commands from your personal account:
+With the automatic setup, run `ghafk update`.
+With a manual setup, run these commands from your personal account:
 
 ```sh
 sudo -iu ghafk go install github.com/mike-diff/ghafk@latest

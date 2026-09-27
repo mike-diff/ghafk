@@ -32,10 +32,13 @@ ghafk start
 Requirements: Linux with systemd or macOS, Go 1.26 or newer, `git` with a
 commit identity, `gh` logged in, and one supported agent CLI.
 
-To keep agents away from the user's keys and other repositories, run ghafk
-as its own Linux user with a fine-grained token. Follow
-`docs/separate-user.md`. Then install new versions and run `ghafk status`
-as that user, not as the user's own account. To add a repository later,
+To keep agents away from the user's keys and other repositories, run
+`ghafk engine setup` from the user's own account. It asks for sudo, creates
+a system account with a hardened service, and asks for a fine-grained
+token. Install a harness as that account (`sudo -iu ghafk`, or `_ghafk` on
+macOS), then run `ghafk engine setup` again. Use `ghafk status`,
+`ghafk update` and `ghafk engine token` from the user's own account. The
+manual steps are in `docs/separate-user.md`. To add a repository later,
 run `ghafk init` in the user's own clone and push the workflow file. The
 engine finds each owned repository with `.ghafk/WORKFLOW.md` on its default
 branch.
@@ -85,7 +88,8 @@ access can use commands.
   `ghafk start`. Run `ghafk start` again.
 - **Every tick fails with `Bad credentials` or `401`:** the GitHub token
   expired. `ghafk status` shows its expiry date. The tick log warns in the
-  last 14 days. Replace the token as `docs/separate-user.md` describes.
+  last 14 days. Run `ghafk engine token`, or with a manual setup replace
+  the token as `docs/separate-user.md` describes.
 - **Logs:** `journalctl --user -u ghafk.service` on Linux,
   `~/Library/Logs/ghafk.log` on macOS.
 
