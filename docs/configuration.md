@@ -173,6 +173,7 @@ contain `A-Z a-z 0-9 . _ : / @ -`.
 | `~/.ghafk/repos` | The registered repository paths, one on each line. `#` starts a comment. |
 | `~/.ghafk/clones/` | The clones of the repositories that ghafk found on GitHub. |
 | `~/.ghafk/config` | The [machine settings](#machine-settings). |
+| `~/.ghafk/env` | Optional. `KEY=value` lines, mode `0600`. `GH_TOKEN` is the token for the `gh` calls and pushes of ghafk. It never goes to agents or checks. Other keys, for example the API key of a harness, go to the agents. If the file does not exist, ghafk uses the `gh` login. |
 | `~/.ghafk/harnesses` | Your harness profiles. |
 | `~/.ghafk/prompts/` | Your replacements for the built-in [prompts](prompts.md). |
 | `~/.ghafk/app`, `~/.ghafk/app.pem` | The App ID and private key of an optional [GitHub App](github-app.md). |

@@ -142,9 +142,9 @@ func ghEnv() []string {
 		}
 	}
 	if engineToken != "" {
-		env = append(env, "GH_TOKEN="+engineToken)
+		return append(env, "GH_TOKEN="+engineToken)
 	}
-	return env
+	return withOwnerToken(env)
 }
 
 var runGH = func(repo string, env []string, args ...string) (string, error) {
@@ -157,7 +157,7 @@ func gh(repo string, args ...string) (string, error) {
 }
 
 func ghOwner(repo string, args ...string) (string, error) {
-	out, err := runGH(repo, runEnv(), args...)
+	out, err := runGH(repo, withOwnerToken(runEnv()), args...)
 	return out, err
 }
 

@@ -41,6 +41,13 @@ func runHarness(args []string) error {
 		if len(rest) == 2 {
 			model = rest[1]
 		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		if err := loadEngineEnv(home); err != nil {
+			return err
+		}
 		return harnessTest(rest[0], model)
 	}
 	usage()

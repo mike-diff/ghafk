@@ -15,6 +15,9 @@ func status() error {
 	if err != nil {
 		return err
 	}
+	if err := loadEngineEnv(home); err != nil {
+		return err
+	}
 	cfg, err := loadMachineSettings()
 	if err != nil {
 		return err
