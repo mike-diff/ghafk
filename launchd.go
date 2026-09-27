@@ -29,8 +29,6 @@ const plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 	<integer>%d</integer>
 	<key>RunAtLoad</key>
 	<true/>
-	<key>ProcessType</key>
-	<string>Background</string>
 	<key>StandardOutPath</key>
 	<string>%s</string>
 	<key>StandardErrorPath</key>

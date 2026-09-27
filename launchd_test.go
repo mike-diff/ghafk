@@ -68,3 +68,9 @@ func TestLaunchdSummaryKeepsOnlyTheStateLines(t *testing.T) {
 		t.Fatalf("summary:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+func TestPlistRunsTicksAtNormalPriority(t *testing.T) {
+	if plist := plistFor("/Users/me/go/bin/ghafk", "/usr/bin", "/Users/me/Library/Logs/ghafk.log", 2); strings.Contains(plist, "ProcessType") {
+		t.Fatalf("the plist sets a ProcessType; Background made checks and builds about six times slower:\n%s", plist)
+	}
+}
