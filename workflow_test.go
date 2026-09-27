@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"github.com/mike-diff/ghafk/internal/harness"
+
+	"os"
+	"path/filepath"
 )
 
 func TestParseWorkflowReconcilerDefaultsToGroomer(t *testing.T) {
@@ -63,5 +66,35 @@ func TestParseWorkflowDefaultsTimeoutToThirtyMinutes(t *testing.T) {
 	}
 	if wf.timeout != 30*time.Minute {
 		t.Fatalf("timeout = %v, want 30m0s", wf.timeout)
+	}
+}
+
+func TestWorkflowComesFromTheDefaultBranchOnGitHub(t *testing.T) {
+	src := gitClone(t)
+	origin, err := run(src, "git", "remote", "get-url", "origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := filepath.Join(t.TempDir(), "engine")
+	if _, err := run(t.TempDir(), "git", "clone", "-q", origin, engine); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, ".ghafk"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, ".ghafk", "WORKFLOW.md"), []byte("---\nchecks: go test ./...\nworker: w\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", "workflow"}, {"push", "-q", "origin", "main"}} {
+		if _, err := run(src, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := run(engine, "git", "fetch", "-q", "origin"); err != nil {
+		t.Fatal(err)
+	}
+	wf, err := loadWorkflow(engine, harness.Env{})
+	if err != nil || wf.checks != "go test ./..." {
+		t.Fatalf("checks = %q, %v; the engine's clone kept an old workflow after a change merged on GitHub", wf.checks, err)
 	}
 }

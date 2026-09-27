@@ -105,6 +105,9 @@ func parseWorkflow(data string, henv harness.Env) (workflow, error) {
 }
 
 func loadWorkflow(repo string, henv harness.Env) (workflow, error) {
+	if text, err := run(repo, "git", "show", "origin/HEAD:.ghafk/WORKFLOW.md"); err == nil {
+		return parseWorkflow(text, henv)
+	}
 	data, err := os.ReadFile(filepath.Join(repo, ".ghafk", "WORKFLOW.md"))
 	if err != nil {
 		return workflow{}, err

@@ -42,6 +42,11 @@ func tick() error {
 	for _, t := range targets {
 		var login string
 		engineToken, login = engineIdentity(owner, func() (ghapp.Identity, error) { return mint(t.name) })
+		engineMintedAt = time.Now()
+		engineRemint = func() (string, error) {
+			id, err := mint(t.name)
+			return id.Token, err
+		}
 		sharedLogin = login == owner
 		if err := workRepo(home, t.path, login, henv); err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", filepath.Base(t.path), err)
@@ -70,6 +75,9 @@ func readRepos(path string) ([]string, error) {
 func workRepo(home, repo, login string, henv harness.Env) error {
 	base := filepath.Base(repo)
 	canWrite = writeChecker(repo)
+	if _, err := run(repo, "git", "fetch", "-q", "origin"); err != nil {
+		return err
+	}
 	wf, err := loadWorkflow(repo, henv)
 	if err != nil {
 		return err
