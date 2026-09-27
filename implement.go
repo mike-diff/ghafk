@@ -59,7 +59,7 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 	}
 	status, changed, err := workChanges(work, before)
 	if err != nil {
-		return err
+		return parkOnError(at, "worker", "ghafk could not read the worker's changes.", err)
 	}
 	if !changed {
 		stepf(base, is.Number, "no changes")
@@ -82,7 +82,7 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 	stepf(base, is.Number, "pr")
 	stat, err := run(work, "git", "diff", "--stat", "origin/"+def+"...HEAD")
 	if err != nil {
-		return err
+		return parkOnError(at, "pr", "ghafk could not list the changes.", err)
 	}
 	prURL, err := ghOwner(work, "pr", "create", "--title", subject, "--head", branch, "--body", renderPRBody(is.Number, summaryLines(answer), stat, prState{}))
 	if err != nil {

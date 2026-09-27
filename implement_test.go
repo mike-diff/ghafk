@@ -109,3 +109,10 @@ func TestRejectedPushParks(t *testing.T) {
 		t.Fatalf("a rejected push was not parked, so the worker reruns every tick: %v", calls)
 	}
 }
+
+func TestAWorkerThatBreaksItsWorktreeParks(t *testing.T) {
+	calls := runIssueWith(t, gitClone(t), `rm -rf "$PWD"`)
+	if !called(calls, "issue edit 5 --add-label needs-human --remove-label agent") {
+		t.Fatalf("a worker that removed its worktree was left queued, so it runs again every tick: %v", calls)
+	}
+}

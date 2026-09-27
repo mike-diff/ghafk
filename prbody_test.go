@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -85,5 +86,21 @@ func TestBodySummaryKeepsTheExistingSummary(t *testing.T) {
 	}
 	if got := bodySummary("Closes #9\n\nopened before this change"); got != "" {
 		t.Fatalf("a body with no sections has no summary, got %q", got)
+	}
+}
+
+func TestAgentTextInPRBodiesAndVerdictsIsBounded(t *testing.T) {
+	var stat []string
+	for i := 0; i < 5000; i++ {
+		stat = append(stat, fmt.Sprintf(" f%d.go | 1 +", i))
+	}
+	stat = append(stat, " 5000 files changed, 5000 insertions(+)")
+	body := renderPRBody(5, summaryLines(strings.Repeat("x", 200000)), strings.Join(stat, "\n"), prState{})
+	if len(body) > 20000 {
+		t.Fatalf("PR body is %d bytes; GitHub refuses bodies over 65536, so every tick fails", len(body))
+	}
+	verdict := renderVerdict("reject", "abc", map[int]cardItem{1: {Status: "fail", Reason: strings.Repeat("y", 100000)}})
+	if len(verdict) > 2000 {
+		t.Fatalf("verdict is %d bytes; one long reason makes the review fail every tick", len(verdict))
 	}
 }
