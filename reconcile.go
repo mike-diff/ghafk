@@ -35,7 +35,7 @@ func reconcile(home, repo, base, login string, wf workflow, def, before, after s
 	}
 	matches := 0
 	for i, is := range issues {
-		if i > 0 && is.Number == issues[i-1].Number || taken[is.Number] || is.Number == landedIssue {
+		if i > 0 && is.Number == issues[i-1].Number || taken[is.Number] || is.Number == landedIssue || tooManyComments(is.Comments) {
 			continue
 		}
 		contract := contractText(is.Comments, login)

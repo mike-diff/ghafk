@@ -102,6 +102,9 @@ func workRepo(home, repo, login string, henv harness.Env) error {
 		return nil
 	}
 	is := issues[pick]
+	if tooManyComments(is.Comments) {
+		return parkTooManyComments(repo, base, login, wf.label, is)
+	}
 	if needsApproval(is, openCard(repo, is, login).st) {
 		return parkForApproval(repo, base, login, wf.label, is)
 	}
@@ -115,6 +118,21 @@ func workRepo(home, repo, login string, henv harness.Env) error {
 		return fmt.Errorf("#%d: %w", is.Number, err)
 	}
 	return nil
+}
+
+func tooManyComments(lists ...[]prComment) bool {
+	for _, l := range lists {
+		if len(l) >= commentLimit {
+			return true
+		}
+	}
+	return false
+}
+
+func parkTooManyComments(repo, base, login, label string, is issue) error {
+	stepf(base, is.Number, "too many comments")
+	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: fmt.Sprintf("This issue or its pull request has %d or more comments.", commentLimit), body: fmt.Sprintf("GitHub gives ghafk only the first %d comments, so ghafk cannot see the newest state or commands. Open a new issue that links to this one.", commentLimit)}
+	return park(parkPlace{repo: repo, base: base, login: login, label: label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments}, "too many comments", spec)
 }
 
 func parkForApproval(repo, base, login, label string, is issue) error {

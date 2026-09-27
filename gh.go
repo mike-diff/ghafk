@@ -32,6 +32,8 @@ func stopWorking(repo, issueNum string) {
 	}
 }
 
+const commentLimit = 100
+
 type author struct {
 	Login string `json:"login"`
 }
