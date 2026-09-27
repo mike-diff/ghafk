@@ -175,3 +175,18 @@ func TestEngineCommentIsMarkerOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentTextInCardsAndQuestionsCannotMention(t *testing.T) {
+	card := renderCard(cardState{Number: 5, Title: "@alice fix it", Phase: "parked", Reason: "@bob asked", History: []cardEvent{{Time: "2026-09-26T10:00:00Z", Name: "parked", Reason: "@carol asked"}}}, time.UTC)
+	question := questionBody("ask @dave?", []string{"@erin"})
+	for _, who := range []string{"alice", "bob", "carol"} {
+		if !strings.Contains(card, "`@"+who+"`") {
+			t.Errorf("the card leaves @%s live, so the bot pings a user that agent text named:\n%s", who, card)
+		}
+	}
+	for _, who := range []string{"dave", "erin"} {
+		if !strings.Contains(question, "`@"+who+"`") {
+			t.Errorf("the question leaves @%s live:\n%s", who, question)
+		}
+	}
+}

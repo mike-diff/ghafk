@@ -85,7 +85,7 @@ func reconcileIssue(home, repo, base, login string, wf workflow, contract, befor
 		}
 	}
 	stepf(base, is.Number, verdict)
-	rest := strings.TrimSpace(strings.TrimPrefix(answer, verdict+":"))
+	rest := neutralize(strings.TrimSpace(strings.TrimPrefix(answer, verdict+":")))
 	spec := commentSpec{kind: "park", role: "reconciler", number: is.Number, sentence: "The reconciler returned no verdict.", body: detailsBlock("Model output", firstLines(rest, 40)), footer: retryFooter()}
 	switch verdict {
 	case "valid":

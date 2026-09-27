@@ -150,7 +150,7 @@ func renderCardBody(st cardState, loc *time.Location, trim bool) string {
 	if st.Contract != "" {
 		heading = "## Contract for #"
 	}
-	b.WriteString(heading + strconv.Itoa(st.Number) + ": " + st.Title + "\n\n")
+	b.WriteString(heading + strconv.Itoa(st.Number) + ": " + neutralize(st.Title) + "\n\n")
 	b.WriteString(renderAlert(st, loc) + "\n\n")
 	if st.Contract != "" {
 		b.WriteString(renderContract(neutralize(st.Contract), st.Items, trim) + "\n\n")
@@ -278,7 +278,7 @@ func renderAlert(st cardState, loc *time.Location) string {
 	lines := []string{"> [!NOTE]"}
 	switch st.Phase {
 	case "parked":
-		lines = []string{"> [!WARNING]", "> Parked in needs-human: " + scrubEmDashes(st.Reason)}
+		lines = []string{"> [!WARNING]", "> Parked in needs-human: " + neutralize(scrubEmDashes(st.Reason))}
 	case "merged":
 		lines = []string{"> [!TIP]", "> Merged."}
 		if checks := manualChecks(st); len(checks) > 0 {
@@ -367,7 +367,7 @@ func renderHistory(events []cardEvent, loc *time.Location) string {
 
 func eventText(e cardEvent) string {
 	if e.Reason != "" {
-		return e.Name + ": " + e.Reason
+		return e.Name + ": " + neutralize(e.Reason)
 	}
 	return e.Name
 }

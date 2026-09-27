@@ -199,13 +199,13 @@ func optionLine(line string) (string, bool) {
 
 func questionBody(question string, options []string) string {
 	if len(options) == 0 {
-		return question
+		return neutralize(question)
 	}
 	numbered := make([]string, len(options))
 	for i, opt := range options {
 		numbered[i] = strconv.Itoa(i+1) + ". " + opt
 	}
-	return question + "\n\n" + strings.Join(numbered, "\n")
+	return neutralize(question + "\n\n" + strings.Join(numbered, "\n"))
 }
 
 func parkFooter(reply, others string) string {
