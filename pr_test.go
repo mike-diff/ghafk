@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -329,5 +330,40 @@ func TestProtectedPathsHoldTheMerge(t *testing.T) {
 	}
 	if got := protectedPaths([]string{"main.go"}); len(got) != 0 {
 		t.Fatalf("an ordinary change was held: %v", got)
+	}
+}
+
+func TestMovingAWorkflowOutOfGithubHoldsTheMerge(t *testing.T) {
+	calls := fakeGH(t, nil)
+	repo := gitClone(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".github", "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".github", "workflows", "ci.yml"), []byte("name: ci\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", "ci"}, {"push", "-q", "origin", "main"}} {
+		if _, err := run(repo, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	work := filepath.Join(t.TempDir(), "work")
+	for _, args := range [][]string{{"worktree", "add", "-q", "-b", "agent/5", work}} {
+		if _, err := run(repo, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, args := range [][]string{{"mv", ".github/workflows/ci.yml", "archived-ci.yml"}, {"commit", "-q", "-m", "move ci"}} {
+		if _, err := run(work, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := mergeRun(t, repo, work, "")
+	held, err := r.holdProtected()
+	if err != nil || !held {
+		t.Fatalf("held = %v, %v; a workflow moved out of .github/ merges unattended", held, err)
+	}
+	if !called(*calls, "issue edit 5 --add-label needs-human") {
+		t.Fatalf("the held change was not handed to the owner: %v", *calls)
 	}
 }
