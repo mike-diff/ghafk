@@ -69,7 +69,7 @@ func steerIssue(repo, base, login string, wf workflow, t *commandTarget) bool {
 	n := strconv.Itoa(t.number)
 	var err error
 	switch {
-	case t.parked && (verb == "answer" || verb == "retry"):
+	case t.parked && (verb == "answer" || verb == "retry") && newerThanPark(t.comments, c, login):
 		stepf(base, t.number, "command "+verb)
 		_, err = gh(repo, "issue", "edit", n, "--add-label", wf.label, "--remove-label", "needs-human")
 		if err == nil {
@@ -197,6 +197,16 @@ func newestCommand(comments []prComment, login string) *prComment {
 	return found
 }
 
+func newerThanPark(comments []prComment, c *prComment, login string) bool {
+	last := ""
+	for _, e := range comments {
+		if e.Author.Login == login && (strings.HasPrefix(e.Body, parkMarker) || strings.HasPrefix(e.Body, commentMarker("question"))) && e.CreatedAt > last {
+			last = e.CreatedAt
+		}
+	}
+	return c.CreatedAt > last
+}
+
 func weParked(comments []prComment, login string) bool {
 	for _, c := range comments {
 		if c.Author.Login == login && strings.HasPrefix(c.Body, parkMarker) {
@@ -204,11 +214,6 @@ func weParked(comments []prComment, login string) bool {
 		}
 	}
 	return false
-}
-
-type reaction struct {
-	Content string `json:"content"`
-	User    author `json:"user"`
 }
 
 const editQuery = `query($owner: String!, $name: String!, $n: Int!) {
@@ -257,12 +262,12 @@ func consumed(repo string, c *prComment, login string) bool {
 	if id == "" {
 		return false
 	}
-	var rs []reaction
-	if err := ghJSON(repo, []string{"api", "repos/{owner}/{repo}/issues/comments/" + id + "/reactions"}, &rs); err != nil {
+	out, err := gh(repo, "api", "--paginate", "repos/{owner}/{repo}/issues/comments/"+id+"/reactions?content=%2B1&per_page=100", "--jq", ".[].user.login")
+	if err != nil {
 		return false
 	}
-	for _, r := range rs {
-		if strings.TrimSuffix(r.User.Login, "[bot]") == login && r.Content == "+1" {
+	for _, who := range strings.Fields(out) {
+		if strings.TrimSuffix(who, "[bot]") == login {
 			return true
 		}
 	}

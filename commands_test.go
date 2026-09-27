@@ -121,3 +121,16 @@ func TestStartLabelsAnIdleIssue(t *testing.T) {
 		}
 	}
 }
+
+func TestARetryOlderThanTheLatestParkIsIgnored(t *testing.T) {
+	stubWriters(t)
+	calls := fakeGH(t, nil)
+	target := &commandTarget{number: 4, parked: true, comments: []prComment{
+		{Body: "/retry", Author: author{Login: "owner"}, Association: "OWNER", CreatedAt: "2026-09-26T10:00:00Z", URL: "https://github.com/o/r/issues/4#issuecomment-1"},
+		{Body: parkMarker + "\nThe checks failed twice.", Author: author{Login: "ghafk"}, CreatedAt: "2026-09-26T10:05:00Z"},
+	}}
+	steerIssue("repo", "demo", "ghafk", workflow{label: "agent"}, target)
+	if called(*calls, "issue edit 4 --add-label agent") {
+		t.Fatalf("a /retry from before the latest park requeued the issue, so it can loop every tick: %v", *calls)
+	}
+}
