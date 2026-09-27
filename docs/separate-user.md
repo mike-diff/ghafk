@@ -209,8 +209,9 @@ Do not bypass a failed check.
 > Never run both timers at the same time.
 > Two engines can work on the same issue.
 
-In each account's login shell, set the runtime directory before user service
-commands:
+ghafk commands find the user service manager themselves.
+Before your own `systemctl --user` commands, set the runtime directory in each
+account's login shell:
 
 ```sh
 export XDG_RUNTIME_DIR="$(loginctl show-user "$(id -u)" -p RuntimePath --value)"
@@ -272,3 +273,15 @@ You do not need the dedicated account.
 
 The engine finds the repository on its next tick and clones it.
 Run `ghafk status` as the dedicated account to see the repository.
+
+## 10. Update ghafk
+
+Run these commands from your personal account:
+
+```sh
+sudo -iu ghafk go install github.com/mike-diff/ghafk@latest
+sudo -iu ghafk ghafk status
+```
+
+The next tick uses the new version.
+You do not need to start the timer again.

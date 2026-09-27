@@ -9,7 +9,18 @@ import (
 )
 
 func systemctl(args ...string) (string, error) {
+	useUserRuntimeDir()
 	return run(".", "systemctl", append([]string{"--user"}, args...)...)
+}
+
+func useUserRuntimeDir() {
+	if os.Getenv("XDG_RUNTIME_DIR") != "" {
+		return
+	}
+	dir := fmt.Sprintf("/run/user/%d", os.Getuid())
+	if _, err := os.Stat(dir); err == nil {
+		os.Setenv("XDG_RUNTIME_DIR", dir)
+	}
 }
 
 func start() error {
