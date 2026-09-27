@@ -6,14 +6,20 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/mike-diff/ghafk/internal/ghapp"
 )
 
 var ownerToken string
 
 var envKey = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 
-func loadEngineEnv(home string) error {
-	path := filepath.Join(home, ".ghafk", "env")
+func loadEngineEnv() error {
+	dir, err := configDir()
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "env")
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return nil
@@ -21,7 +27,7 @@ func loadEngineEnv(home string) error {
 	if err != nil {
 		return err
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	if !ghapp.SecretMode(info) {
 		return fmt.Errorf("%s holds secrets and must be readable only by its owner: chmod 600 %s", path, path)
 	}
 	data, err := os.ReadFile(path)

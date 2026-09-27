@@ -23,11 +23,11 @@ type settings struct {
 }
 
 func configPath() (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := configDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".ghafk", "config"), nil
+	return filepath.Join(dir, "config"), nil
 }
 
 func loadMachineSettings() (settings, error) {

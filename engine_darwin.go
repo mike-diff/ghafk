@@ -178,14 +178,14 @@ func engineSetup() error {
 			return err
 		}
 		runPrivileged("", "launchctl", "bootout", "system/"+engineLabel)
-		if err := installRoot(plist, enginePlistPath); err != nil {
+		if err := installRoot(plist, enginePlistPath, rootGroup, 0o644); err != nil {
 			return err
 		}
 		if _, err := runPrivileged("", "launchctl", "bootstrap", "system", enginePlistPath); err != nil {
 			return err
 		}
 	}
-	list, err := runPrivileged("", "-u", l.user, "-H", "env", "-i", "HOME="+l.home, "USER="+l.user, "PATH="+enginePathDarwin(l.home), l.bin, "harness", "list")
+	list, err := runPrivileged("", "-u", l.user, "-H", "env", "-i", "HOME="+l.home, "USER="+l.user, "PATH="+enginePathDarwin(l.home), configDirEnv+"="+l.etc, l.bin, "harness", "list")
 	if err != nil {
 		fmt.Printf("ghafk: warning: could not list the engine's harnesses: %v\n", err)
 	}
@@ -244,7 +244,7 @@ func engineRemove(purge bool) error {
 		return err
 	}
 	runPrivileged("", "launchctl", "bootout", "system/"+engineLabel)
-	if _, err := runPrivileged("", "rm", "-f", enginePlistPath, l.bin); err != nil {
+	if _, err := runPrivileged("", "rm", "-rf", enginePlistPath, l.bin, l.etc); err != nil {
 		return err
 	}
 	fmt.Println("ghafk: removed the engine service and binary")

@@ -11,8 +11,13 @@ import (
 
 func TestATickThatFailsEarlyStillWritesItsStatus(t *testing.T) {
 	useOwnerToken(t)
-	home := writeEngineEnv(t, "GH_TOKEN=x\n", 0o644)
+	home := t.TempDir()
 	t.Setenv("HOME", home)
+	cfg := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cfg, "env"), []byte("GH_TOKEN=x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(configDirEnv, cfg)
 	if err := tick(); err == nil {
 		t.Fatal("a readable env file did not stop the tick")
 	}
