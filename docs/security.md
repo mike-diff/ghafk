@@ -37,6 +37,8 @@ instructions. ghafk applies these limits:
 - ghafk works and merges only the pull requests that it opened, from the
   same repository.
 - A change to `.github/` or `.ghafk/` always waits for you.
+- An issue or pull request with 100 or more comments parks. GitHub gives
+  ghafk only the first 100 comments, so ghafk cannot see newer commands.
 
 ## Prompts are not controls
 

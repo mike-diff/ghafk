@@ -57,6 +57,9 @@ func workPR(home, repo, base, login string, wf workflow, prs []pr) (bool, error)
 		prNum: strconv.Itoa(pick.Number), issueNum: strconv.Itoa(n), branch: pick.HeadRefName}
 	startWorking(repo, r.issueNum)
 	defer stopWorking(repo, r.issueNum)
+	if tooManyComments(is.Comments, pick.Comments, pick.Reviews) {
+		return true, parkTooManyComments(repo, base, login, wf.label, is)
+	}
 	r.card = openCard(repo, is, login)
 	if needsApproval(is, r.card.st) {
 		return true, parkForApproval(repo, base, login, wf.label, is)
