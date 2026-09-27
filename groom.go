@@ -34,7 +34,7 @@ func groomIssue(home, repo, base, login string, wf workflow, is issue) error {
 	if err := clearStale(repo, work, branch); err != nil {
 		return err
 	}
-	if _, err := run(repo, "git", "worktree", "add", work, "-b", branch, "origin/"+def); err != nil {
+	if err := addWorktree(repo, work, "-b", branch, "origin/"+def); err != nil {
 		return err
 	}
 	defer discardWork(repo, work, branch)

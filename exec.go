@@ -56,6 +56,7 @@ func clearStale(repo, work, branch string) error {
 }
 
 func worktreeRemove(repo, work string) {
+	delete(worktreeGitDirs, work)
 	if _, err := run(repo, "git", "worktree", "remove", "--force", work); err != nil {
 		os.RemoveAll(work)
 	}
@@ -95,8 +96,19 @@ func run(dir, name string, args ...string) (string, error) {
 
 func runWithEnv(dir, name string, env []string, args ...string) (string, error) {
 	stdin := ""
-	if name == "gh" {
+	switch name {
+	case "gh":
 		args, stdin = bodyToStdin(args)
+	case "git":
+		hardened, err := hardenGit(dir, args)
+		if err != nil {
+			return "", err
+		}
+		args = hardened
+		if env == nil {
+			env = os.Environ()
+		}
+		env = append(append([]string{}, env...), "GIT_CONFIG_NOSYSTEM=1")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
 	defer cancel()

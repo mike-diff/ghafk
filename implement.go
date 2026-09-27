@@ -42,7 +42,7 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 	}
 
 	stepf(base, is.Number, "worktree")
-	if _, err := run(repo, "git", "worktree", "add", work, "-b", branch, "origin/"+def); err != nil {
+	if err := addWorktree(repo, work, "-b", branch, "origin/"+def); err != nil {
 		return err
 	}
 	defer worktreeRemove(repo, work)

@@ -130,7 +130,7 @@ func (r *prRun) checkout() error {
 	if _, err := run(r.repo, "git", "fetch", "origin", "+refs/heads/"+r.branch+":refs/heads/"+r.branch); err != nil {
 		return err
 	}
-	if _, err := run(r.repo, "git", "worktree", "add", r.work, r.branch); err != nil {
+	if err := addWorktree(r.repo, r.work, r.branch); err != nil {
 		return err
 	}
 	if r.baseSha, err = run(r.work, "git", "rev-parse", "origin/"+r.def); err != nil {

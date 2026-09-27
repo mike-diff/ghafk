@@ -44,6 +44,19 @@ required reviews on your default branch.
 > status check that is still running, GitHub refuses the merge and the
 > issue parks.
 
+## Git commands of ghafk
+
+An agent can change files in its worktree, including git files. ghafk
+does not let those changes run code in its own git commands:
+
+- ghafk uses the git folder that it recorded when it made the worktree.
+  It ignores the `.git` file in the worktree.
+- ghafk deletes a `config.worktree` file before each git command.
+- ghafk runs git without repository hooks, without `core.fsmonitor`,
+  without the `ext::` protocol and without the system git config.
+
+Your repository hooks do not run for the commits and pushes of ghafk.
+
 ## Other risks
 
 - **Checks run the code of the pull request** on your machine. This
