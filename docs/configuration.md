@@ -2,6 +2,9 @@
 
 This page lists every command, setting, label and file that ghafk uses.
 
+To limit access to your personal files, [run ghafk as a separate Linux
+user](separate-user.md).
+
 - [Commands](#commands)
 - [Machine settings](#machine-settings)
 - [WORKFLOW.md](#workflowmd)
