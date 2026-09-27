@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -38,7 +39,7 @@ func TestEngineReposClonesADiscoveredRepositoryOnlyForATick(t *testing.T) {
 	})
 	want := []target{{"me/app", filepath.Join(home, ".ghafk", "clones", "me", "app")}}
 
-	got, err := engineRepos(home, nil, false)
+	got, err := engineRepos(home, nil, nil, false)
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("status targets = %v, %v; want %v", got, err, want)
 	}
@@ -46,10 +47,26 @@ func TestEngineReposClonesADiscoveredRepositoryOnlyForATick(t *testing.T) {
 		t.Fatal("status cloned a repository")
 	}
 
-	if _, err := engineRepos(home, nil, true); err != nil {
+	if _, err := engineRepos(home, nil, nil, true); err != nil {
 		t.Fatal(err)
 	}
 	if !called(*calls, "repo clone me/app "+want[0].path) {
 		t.Fatalf("the tick did not clone the discovered repository: %v", *calls)
+	}
+}
+
+func TestListedRepositoriesAreWorkedEvenWhenDiscoveryFails(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "api graphql") {
+			return "", errors.New("network down")
+		}
+		return "", nil
+	})
+	got, err := engineRepos(home, nil, []string{"org/tool", "org/tool"}, false)
+	want := []target{{"org/tool", filepath.Join(home, ".ghafk", "clones", "org", "tool")}}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("targets = %v, %v; want the organization repository from the repo line once", got, err)
 	}
 }

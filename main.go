@@ -22,7 +22,7 @@ func main() {
 		if len(os.Args) == 3 {
 			path = os.Args[2]
 		}
-	case "harness":
+	case "harness", "engine":
 	case "help", "-h", "--help":
 		fmt.Print(usageText)
 		return
@@ -31,20 +31,27 @@ func main() {
 	}
 	var err error
 	switch verb {
-	case "tick":
+	case "tick", "start", "stop":
+		err = refuseBesideEngine(verb)
+	}
+	switch {
+	case err != nil:
+	case verb == "tick":
 		err = tick()
-	case "start":
+	case verb == "start":
 		err = start()
-	case "stop":
+	case verb == "stop":
 		err = stop()
-	case "status":
+	case verb == "status":
 		err = status()
-	case "init":
+	case verb == "init":
 		err = initRepo(path)
-	case "remove":
+	case verb == "remove":
 		err = removeRepo(path)
-	case "harness":
+	case verb == "harness":
 		err = runHarness(os.Args[2:])
+	case verb == "engine":
+		err = runEngine(os.Args[2:])
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ghafk:", err)
@@ -64,6 +71,10 @@ Usage:
   ghafk harness list                       list harness profiles and whether each is installed
   ghafk harness default <harness> <model>  set the machine default worker
   ghafk harness test <harness> [model]     check a harness in a scratch repository
+  ghafk engine setup                       run the engine as its own system account (asks sudo); run again to refresh
+  ghafk engine token                       replace the engine's GitHub token
+  ghafk engine start | stop                turn the engine's timer on or off
+  ghafk engine remove [--purge]            remove the engine service; --purge also deletes its account and home
   ghafk help                               show this help
 `
 

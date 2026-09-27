@@ -19,6 +19,7 @@ type settings struct {
 	progress []string
 	interval int
 	skip     []string
+	repos    []string
 }
 
 func configPath() (string, error) {
@@ -72,6 +73,11 @@ func loadSettings(path string) (settings, error) {
 				return s, fmt.Errorf("config: skip %q must name a repository as owner/name", value)
 			}
 			s.skip = append(s.skip, value)
+		case "repo":
+			if strings.Count(value, "/") != 1 || strings.HasPrefix(value, "-") {
+				return s, fmt.Errorf("config: repo %q must name a repository as owner/name", value)
+			}
+			s.repos = append(s.repos, value)
 		}
 	}
 	return s, nil

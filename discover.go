@@ -23,7 +23,7 @@ type target struct {
 	path string
 }
 
-func engineRepos(home string, skip []string, cloneNew bool) ([]target, error) {
+func engineRepos(home string, skip, listed []string, cloneNew bool) ([]target, error) {
 	file, err := reposFile()
 	if err != nil {
 		return nil, err
@@ -46,9 +46,9 @@ func engineRepos(home string, skip []string, cloneNew bool) ([]target, error) {
 	out, err := ghOwner(home, "api", "graphql", "--paginate", "-f", "query="+discoverQuery, "--jq", discoverJQ)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ghafk: repository discovery failed: %v\n", err)
-		return targets, nil
+		out = ""
 	}
-	for _, name := range newRepos(parseDiscovery(out), seen, skip) {
+	for _, name := range newRepos(append(listed, parseDiscovery(out)...), seen, skip) {
 		path := filepath.Join(home, ".ghafk", "clones", name)
 		if _, err := os.Stat(path); os.IsNotExist(err) && cloneNew {
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -82,6 +82,7 @@ func newRepos(found []string, seen map[string]bool, skip []string) []string {
 		if seen[strings.ToLower(name)] || skipped(name, skip) {
 			continue
 		}
+		seen[strings.ToLower(name)] = true
 		names = append(names, name)
 	}
 	return names

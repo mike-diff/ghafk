@@ -58,7 +58,7 @@ func tick() (err error) {
 		st.TokenExpires = expires.UTC().Format(time.RFC3339)
 	}
 	mint := appMinter()
-	targets, err := engineRepos(home, cfg.skip, true)
+	targets, err := engineRepos(home, cfg.skip, cfg.repos, true)
 	if err != nil {
 		return err
 	}

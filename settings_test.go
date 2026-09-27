@@ -39,9 +39,12 @@ func TestSettingsReadProgressColumnsAndInterval(t *testing.T) {
 }
 
 func TestSettingsCollectEverySkipLine(t *testing.T) {
-	s, err := loadSettings(writeSettings(t, "skip: me/old\nskip: me/private\n"))
+	s, err := loadSettings(writeSettings(t, "skip: me/old\nskip: me/private\nrepo: org/tool\n"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.repos, []string{"org/tool"}) {
+		t.Fatalf("repos = %v, want the organization repository", s.repos)
 	}
 	if !reflect.DeepEqual(s.skip, []string{"me/old", "me/private"}) {
 		t.Fatalf("skip = %v, want both repositories", s.skip)
@@ -56,6 +59,7 @@ func TestSettingsRejectMistakes(t *testing.T) {
 		"interval: 0\n",
 		"interval: two\n",
 		"skip: private\n",
+		"repo: tool\n",
 	} {
 		if _, err := loadSettings(writeSettings(t, text)); err == nil {
 			t.Fatalf("%q was accepted; a typo would silently change the card or the timer", strings.TrimSpace(text))
