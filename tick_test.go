@@ -29,7 +29,7 @@ func floodedComments() string {
 }
 
 func TestAFloodedIssueParksInsteadOfGrooming(t *testing.T) {
-	repo, _ := gitRepo(t)
+	repo := gitClone(t)
 	if err := os.MkdirAll(filepath.Join(repo, ".ghafk"), 0o755); err != nil {
 		t.Fatal(err)
 	}

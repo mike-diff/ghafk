@@ -45,3 +45,14 @@ func TestEngineEnvCarriesTheEngineTokenWhileRunShellStripsIt(t *testing.T) {
 		t.Fatalf("runShell leaked GH_TOKEN to its child: %q", got)
 	}
 }
+
+func TestAnOldAppTokenIsMintedAgain(t *testing.T) {
+	oldToken, oldAt, oldRemint := engineToken, engineMintedAt, engineRemint
+	t.Cleanup(func() { engineToken, engineMintedAt, engineRemint = oldToken, oldAt, oldRemint })
+	engineToken, engineMintedAt = "expiring", time.Now().Add(-51*time.Minute)
+	engineRemint = func() (string, error) { return "fresh", nil }
+	env := strings.Join(ghEnv(), "\n")
+	if !strings.Contains(env, "GH_TOKEN=fresh") || strings.Contains(env, "GH_TOKEN=expiring") {
+		t.Fatal("a tick longer than an hour kept using an expired app token, so its later bot calls fail")
+	}
+}

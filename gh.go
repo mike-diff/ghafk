@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func commentID(url string) string {
@@ -124,8 +125,22 @@ var (
 	ownerLogin  string
 )
 
+const tokenRefresh = 50 * time.Minute
+
+var (
+	engineRemint   func() (string, error)
+	engineMintedAt time.Time
+)
+
 func ghEnv() []string {
 	env := runEnv()
+	if engineToken != "" && engineRemint != nil && time.Since(engineMintedAt) > tokenRefresh {
+		if token, err := engineRemint(); err == nil {
+			engineToken, engineMintedAt = token, time.Now()
+		} else {
+			fmt.Fprintf(os.Stderr, "ghafk: app token refresh failed: %v\n", err)
+		}
+	}
 	if engineToken != "" {
 		env = append(env, "GH_TOKEN="+engineToken)
 	}

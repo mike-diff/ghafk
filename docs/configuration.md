@@ -91,7 +91,10 @@ the problem.
 
 ## WORKFLOW.md
 
-Each registered repository has the file `.ghafk/WORKFLOW.md`. The file
+Each registered repository has the file `.ghafk/WORKFLOW.md`. On each tick,
+ghafk reads the file from the default branch on GitHub. A change applies
+after you push it. If the clone has no `origin/HEAD`, ghafk reads the file in
+the clone. The file
 starts with a block of `key: value` lines. ghafk adds the text after the
 block to each prompt, after the built-in instructions. Use it for the rules
 of your repository. See [prompts](prompts.md).
