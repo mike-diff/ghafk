@@ -12,6 +12,9 @@ log, use:
 | Cause | Fix |
 |---|---|
 | The timer does not run. | Run `ghafk start`. Then look for the next run in `ghafk status`. |
+| `ghafk tick` or `ghafk start` says that an engine runs on this machine. | The engine works the repositories. Use `ghafk engine start` or `ghafk engine stop`, and `ghafk status`. |
+| `ghafk status` says that you cannot read the files of the engine. | Setup added you to the group of the engine. On Linux, log out and log in again. On macOS, open a new terminal. |
+| `ghafk engine setup` says that an account exists with a different home. | A manual setup uses that account. Remove its timer and the account, or keep the manual setup. |
 | The repository is not registered. | Run `ghafk init` in the repository. Commit and push `.ghafk/WORKFLOW.md`. |
 | `ghafk status` does not show a repository that you pushed. | The token of the engine's `gh` login does not include the repository, a `skip` line names it, or an organization owns it. See [repositories](configuration.md#repositories). |
 | `ghafk status` shows `not ready` for the repository. | Read the reason. Usually `.ghafk/WORKFLOW.md` is missing or has no worker, and no machine default is set. |
@@ -57,6 +60,6 @@ GitHub refuses a merge that breaks a branch protection rule.
 | The push fails during a tick. | The timer has no SSH agent. Run `gh auth setup-git` and use HTTPS. |
 | `config: ...` | A value in `~/.ghafk/config` is not correct. Read the message and correct the line. See [machine settings](configuration.md#machine-settings). |
 | The log shows that ghafk cannot get an app token. | ghafk uses your login instead. Look at the App ID, the key and the installation. See [Run as a GitHub App](github-app.md). |
-| Each tick fails with `Bad credentials` or `401`. | The GitHub token expired. `ghafk status` shows the expiry date. Replace the token. See [Replace the token before it expires](separate-user.md#replace-the-token-before-it-expires). |
+| Each tick fails with `Bad credentials` or `401`. | The GitHub token expired. `ghafk status` shows the expiry date. Run `ghafk engine token`. With a manual setup, see [Replace the token before it expires](separate-user.md#replace-the-token-before-it-expires). |
 | The log shows a warning that the GitHub token expires soon. | Replace the token before the date in the warning. |
 | `ghafk harness test` fails. | Log in to the agent CLI, and look at its model name. Then run the test again. |

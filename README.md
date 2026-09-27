@@ -85,19 +85,27 @@ flowchart TD
    ```
 
    ghafk also works each repository that you own where
-   `.ghafk/WORKFLOW.md` is on the default branch. If ghafk runs as a
-   [separate user](docs/separate-user.md), run `ghafk init` in your own
-   clone and push. The engine finds the repository on its next tick. See
+   `.ghafk/WORKFLOW.md` is on the default branch. If the engine runs as its
+   own account, run `ghafk init` in your own clone and push. The engine
+   finds the repository on its next tick. See
    [repositories](docs/configuration.md#repositories).
 
-4. Start the timer.
+4. Start the engine. We recommend its own account:
 
    ```sh
-   ghafk start
+   ghafk engine setup
    ```
+
+   The command asks for your sudo password once. It creates a system
+   account, installs a hardened service and asks for a GitHub token. Then
+   install your harness as that account. The command tells you how. To run
+   the engine as you instead, use `ghafk start`. See
+   [the engine account](docs/separate-user.md).
 
 5. Label an issue `agent`, or comment `/start` on it. To get good results,
    read [how to write an issue](docs/writing-issues.md).
+
+To update ghafk and the engine, run `ghafk update`.
 
 > [!TIP]
 > The timer has no SSH agent. If you push over HTTPS, run `gh auth setup-git`.
@@ -164,9 +172,10 @@ label, harness profile and file. To show ghafk as a bot on GitHub,
 
 ## Security
 
-- Agents run as you, with your credentials and network access. To keep
-  them away from your keys and other repositories, [run ghafk as its own
-  Linux user](docs/separate-user.md).
+- Agents run as the account of the engine. With `ghafk engine setup`, that
+  is a separate system account. On Linux, a hardened service also hides the
+  home directories. With `ghafk start`, agents run as you, with your
+  credentials. See [the engine account](docs/separate-user.md).
 - ghafk's own git commands ignore git files that an agent changes.
 - Only people with write access can send commands or add prompt text.
 - ghafk works only the pull requests that it opened.
