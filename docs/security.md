@@ -17,7 +17,8 @@ other repositories and `~/.ghafk/app.pem`.
 ghafk removes the GitHub token variables from the environment of the
 agent. This is not isolation. Only a harness with its own sandbox limits
 what the agent can touch, for example `codex --sandbox workspace-write`.
-For more isolation, run ghafk as a special Unix user or in a VM.
+For more isolation, [run ghafk as a separate Linux user](separate-user.md)
+or use a VM.
 
 ## Issue text is a prompt
 
