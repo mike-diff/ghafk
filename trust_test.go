@@ -95,7 +95,7 @@ func TestIssueFromOutsiderNeedsApprovalOfTheCurrentText(t *testing.T) {
 func TestStartRecordsTheApprovedText(t *testing.T) {
 	stubWriters(t)
 	calls := fakeGH(t, nil)
-	target := &commandTarget{number: 4, title: "add x", body: "please", comments: []prComment{{Body: "/start", Author: author{Login: "owner"}, Association: "OWNER"}}}
+	target := &commandTarget{number: 4, author: "outsider", title: "add x", body: "please", comments: []prComment{{Body: "/start", Author: author{Login: "owner"}, Association: "OWNER", CreatedAt: "2026-09-26T10:00:00Z"}}}
 	steerIssue("repo", "demo", "owner", workflow{label: "agent"}, target)
 	want := issueDigest(issue{Title: "add x", Body: "please"})
 	for _, c := range *calls {
@@ -108,4 +108,28 @@ func TestStartRecordsTheApprovedText(t *testing.T) {
 		}
 	}
 	t.Fatalf("/start did not record the approved text on the card: %v", *calls)
+}
+
+func TestStartRefusesTextEditedAfterTheCommand(t *testing.T) {
+	stubWriters(t)
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "api graphql") {
+			return "2026-09-26T10:05:00Z", nil
+		}
+		return "", nil
+	})
+	target := &commandTarget{number: 4, author: "outsider", title: "add x", body: "edited after /start", comments: []prComment{{Body: "/start", Author: author{Login: "owner"}, Association: "OWNER", CreatedAt: "2026-09-26T10:00:00Z"}}}
+	steerIssue("repo", "demo", "owner", workflow{label: "agent"}, target)
+	for _, c := range *calls {
+		for i, a := range c.args {
+			if a == "--body" && i+1 < len(c.args) {
+				if st, ok := parseCard(c.args[i+1]); ok && st.Approved != "" {
+					t.Fatalf("text edited after /start was approved: %v", *calls)
+				}
+			}
+		}
+	}
+	if !called(*calls, "issue edit 4 --add-label needs-human --remove-label agent") {
+		t.Fatalf("the edited issue was not parked for a new /start: %v", *calls)
+	}
 }

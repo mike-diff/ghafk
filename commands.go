@@ -5,12 +5,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var commandEvent = map[string]string{"answer": "answered", "retry": "retried"}
 
 type commandTarget struct {
 	number   int
+	author   string
 	title    string
 	body     string
 	comments []prComment
@@ -30,11 +32,11 @@ func steer(repo, base, login string, wf workflow) (map[int]bool, error) {
 	targets := map[int]*commandTarget{}
 	var order []int
 	var open []issue
-	if err := ghJSON(repo, []string{"issue", "list", "--state", "open", "--limit", "500", "--json", "number,title,body,comments,labels"}, &open); err != nil {
+	if err := ghJSON(repo, []string{"issue", "list", "--state", "open", "--limit", "500", "--json", "number,author,title,body,comments,labels"}, &open); err != nil {
 		return held, err
 	}
 	for _, is := range open {
-		targets[is.Number] = &commandTarget{number: is.Number, title: is.Title, body: is.Body, comments: is.Comments, labeled: issueLabeled(is.Labels, wf.label), parked: issueLabeled(is.Labels, "needs-human")}
+		targets[is.Number] = &commandTarget{number: is.Number, author: is.Author.Login, title: is.Title, body: is.Body, comments: is.Comments, labeled: issueLabeled(is.Labels, wf.label), parked: issueLabeled(is.Labels, "needs-human")}
 		order = append(order, is.Number)
 	}
 	for _, n := range order {
@@ -75,9 +77,19 @@ func steerIssue(repo, base, login string, wf workflow, t *commandTarget) bool {
 		}
 	case verb == "start" && startApplies(*t):
 		stepf(base, t.number, "command start")
+		is := issue{Number: t.number, Author: author{Login: t.author}, Title: t.title, Body: t.body, Comments: t.comments}
+		if !canWrite(t.author) {
+			var edited bool
+			if edited, err = editedSince(repo, t.number, c.CreatedAt); err != nil {
+				break
+			}
+			if edited {
+				err = parkForApproval(repo, base, login, wf.label, is)
+				break
+			}
+		}
 		_, err = gh(repo, "issue", "edit", n, "--add-label", wf.label, "--remove-label", "needs-human")
 		if err == nil {
-			is := issue{Number: t.number, Title: t.title, Body: t.body, Comments: t.comments}
 			openCard(repo, is, login).approve(issueDigest(is))
 		}
 	case verb == "close":
@@ -197,6 +209,37 @@ func weParked(comments []prComment, login string) bool {
 type reaction struct {
 	Content string `json:"content"`
 	User    author `json:"user"`
+}
+
+const editQuery = `query($owner: String!, $name: String!, $n: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $n) {
+      lastEditedAt
+      timelineItems(last: 1, itemTypes: [RENAMED_TITLE_EVENT]) { nodes { ... on RenamedTitleEvent { createdAt } } }
+    }
+  }
+}`
+
+func editedSince(repo string, number int, at string) (bool, error) {
+	since, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		return false, err
+	}
+	out, err := gh(repo, "api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-F", "n="+strconv.Itoa(number), "-f", "query="+editQuery,
+		"--jq", `.data.repository.issue | [.lastEditedAt, .timelineItems.nodes[0].createdAt] | map(select(. != null)) | join(" ")`)
+	if err != nil {
+		return false, err
+	}
+	for _, field := range strings.Fields(out) {
+		edit, err := time.Parse(time.RFC3339, field)
+		if err != nil {
+			return false, err
+		}
+		if !edit.Before(since) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func ackCommand(repo string, c *prComment) {
