@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
