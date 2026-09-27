@@ -90,7 +90,7 @@ func engineSetup() error {
 		}
 		relogin = true
 	}
-	if _, err := runPrivileged("", "install", "-d", "-o", l.user, "-g", l.user, "-m", "0750", l.config()); err != nil {
+	if _, err := runPrivileged("", "-u", l.user, "mkdir", "-p", "-m", "0750", l.config()); err != nil {
 		return err
 	}
 	if self != l.bin {
@@ -98,7 +98,7 @@ func engineSetup() error {
 			return err
 		}
 	}
-	if err := installAs(l, renderEngineGitconfig(name, email, ghPath), 0o644, l.user, filepath.Join(l.home, ".gitconfig")); err != nil {
+	if err := writeAsEngine(l, renderEngineGitconfig(name, email, ghPath), 0o644, filepath.Join(l.home, ".gitconfig")); err != nil {
 		return err
 	}
 	if err := syncConfig(l, me.HomeDir); err != nil {
@@ -113,10 +113,10 @@ func engineSetup() error {
 			return err
 		}
 	}
-	if err := installAs(l, engineServiceUnit(l), 0o644, "root", unitPath(".service")); err != nil {
+	if err := installRoot(engineServiceUnit(l), unitPath(".service")); err != nil {
 		return err
 	}
-	if err := installAs(l, engineTimerUnit(cfg.interval), 0o644, "root", unitPath(".timer")); err != nil {
+	if err := installRoot(engineTimerUnit(cfg.interval), unitPath(".timer")); err != nil {
 		return err
 	}
 	for _, args := range [][]string{{"systemctl", "daemon-reload"}, {"systemctl", "enable", "--now", engineUnitName + ".timer"}} {
@@ -212,5 +212,6 @@ func reexecWithGroup(l engineLayout) bool {
 	cmd := exec.Command("sg", l.user, "-c", "'"+strings.ReplaceAll(self, "'", `'\''`)+"' status")
 	cmd.Env = append(os.Environ(), "GHAFK_SG=1")
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run() == nil
+	cmd.Run()
+	return true
 }

@@ -116,3 +116,20 @@ func TestAWorkerThatBreaksItsWorktreeParks(t *testing.T) {
 		t.Fatalf("a worker that removed its worktree was left queued, so it runs again every tick: %v", calls)
 	}
 }
+
+func TestAnEmptyContractParksInsteadOfGroomingAgain(t *testing.T) {
+	repo := gitClone(t)
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "repo view") {
+			return "main", nil
+		}
+		return "", nil
+	})
+	wf := workflow{label: "agent", groomer: harness.Role{Command: `printf 'contract:\n'`}, timeout: time.Minute}
+	if err := groomIssue(t.TempDir(), repo, "demo", "owner", wf, issue{Number: 5, Title: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if !called(*calls, "issue edit 5 --add-label needs-human --remove-label agent") {
+		t.Fatalf("an empty contract was saved and queued, so the groomer runs again every tick: %v", *calls)
+	}
+}

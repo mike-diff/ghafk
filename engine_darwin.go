@@ -145,7 +145,7 @@ func engineSetup() error {
 		}
 		relogin = true
 	}
-	if _, err := runPrivileged("", "install", "-d", "-o", l.user, "-g", l.user, "-m", "0750", l.config()); err != nil {
+	if _, err := runPrivileged("", "-u", l.user, "mkdir", "-p", "-m", "0750", l.config()); err != nil {
 		return err
 	}
 	if self != l.bin {
@@ -156,7 +156,7 @@ func engineSetup() error {
 			return err
 		}
 	}
-	if err := installAs(l, renderEngineGitconfig(name, email, ghPath), 0o644, l.user, filepath.Join(l.home, ".gitconfig")); err != nil {
+	if err := writeAsEngine(l, renderEngineGitconfig(name, email, ghPath), 0o644, filepath.Join(l.home, ".gitconfig")); err != nil {
 		return err
 	}
 	if err := syncConfig(l, me.HomeDir); err != nil {
@@ -178,7 +178,7 @@ func engineSetup() error {
 			return err
 		}
 		runPrivileged("", "launchctl", "bootout", "system/"+engineLabel)
-		if err := installAs(l, plist, 0o644, "root", enginePlistPath); err != nil {
+		if err := installRoot(plist, enginePlistPath); err != nil {
 			return err
 		}
 		if _, err := runPrivileged("", "launchctl", "bootstrap", "system", enginePlistPath); err != nil {

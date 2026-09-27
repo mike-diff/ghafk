@@ -385,11 +385,11 @@ func protectedPaths(files []string) []string {
 }
 
 func (r *prRun) holdProtected() (bool, error) {
-	out, err := run(r.work, "git", "diff", "--no-renames", "--name-only", "origin/"+r.def+"...HEAD")
+	out, err := run(r.work, "git", "diff", "--no-renames", "--name-only", "-z", "origin/"+r.def+"...HEAD")
 	if err != nil {
 		return false, err
 	}
-	held := protectedPaths(strings.Split(out, "\n"))
+	held := protectedPaths(strings.Split(out, "\x00"))
 	if len(held) == 0 {
 		return false, nil
 	}

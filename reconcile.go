@@ -9,11 +9,11 @@ import (
 )
 
 func reconcile(home, repo, base, login string, wf workflow, def, before, after string, landedIssue int) error {
-	out, err := run(repo, "git", "diff", "--no-renames", "--name-only", before, after)
+	out, err := run(repo, "git", "diff", "--no-renames", "--name-only", "-z", before, after)
 	if err != nil {
 		return err
 	}
-	landed := strings.Fields(out)
+	landed := strings.FieldsFunc(out, func(r rune) bool { return r == 0 })
 	var issues []issue
 	for _, l := range []string{wf.label, "needs-human"} {
 		var list []issue

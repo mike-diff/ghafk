@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/xml"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -111,5 +113,78 @@ func TestEngineTimerCatchesUpAfterDowntime(t *testing.T) {
 		if !strings.Contains(timer, want) {
 			t.Errorf("%s.timer lacks %q:\n%s", engineUnitName, want, timer)
 		}
+	}
+}
+
+func TestSetupNeverTouchesTheEngineHomeAsRoot(t *testing.T) {
+	var calls [][]string
+	old := runPrivileged
+	runPrivileged = func(stdin string, args ...string) (string, error) {
+		calls = append(calls, args)
+		return "GH_TOKEN=old\nKEY=v", nil
+	}
+	t.Cleanup(func() { runPrivileged = old })
+	person := t.TempDir()
+	for _, name := range []string{"config", "harnesses", "app", "app.pem", "prompts/worker.md"} {
+		path := filepath.Join(person, ".ghafk", name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := syncConfig(linuxEngine, person); err != nil {
+		t.Fatal(err)
+	}
+	if err := storeToken(linuxEngine, "new"); err != nil {
+		t.Fatal(err)
+	}
+	hasToken(linuxEngine)
+	for _, c := range calls {
+		if strings.Contains(strings.Join(c, " "), linuxEngine.home) && (len(c) < 2 || c[0] != "-u" || c[1] != linuxEngine.user) {
+			t.Errorf("root touches %q; an agent can point that path at any file on the system", strings.Join(c, " "))
+		}
+	}
+	if len(calls) < 6 {
+		t.Fatalf("only %d privileged calls; the files were not copied", len(calls))
+	}
+}
+
+func TestEngineWriteReplacesALinkInsteadOfWritingThroughIt(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(dir, "env")
+	if err := os.Symlink(target, dest); err != nil {
+		t.Fatal(err)
+	}
+	stdin := os.Stdin
+	r, w, _ := os.Pipe()
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = stdin })
+	w.WriteString("GH_TOKEN=x\n")
+	w.Close()
+	if err := engineWrite([]string{dest, "0600"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(target); string(got) != "keep" {
+		t.Fatalf("the write followed the link and changed %s", target)
+	}
+	info, err := os.Lstat(dest)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o600 {
+		t.Fatalf("dest = %v, %v; want a regular 0600 file", info.Mode(), err)
+	}
+}
+
+func TestStatusReadsOnlyRegularEngineFiles(t *testing.T) {
+	link := filepath.Join(t.TempDir(), "status.json")
+	if err := os.Symlink("/dev/zero", link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readEngineFile(link, 1<<20); err == nil {
+		t.Fatal("a status file linked to a device was read, so an agent can hang `ghafk status`")
 	}
 }
