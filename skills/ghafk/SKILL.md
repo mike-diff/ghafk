@@ -35,15 +35,18 @@ commit identity, `gh` logged in, and one supported agent CLI.
 To keep agents away from the user's keys and other repositories, run ghafk
 as its own Linux user with a fine-grained token. Follow
 `docs/separate-user.md`. Then install new versions and run `ghafk status`
-as that user, not as the user's own account.
+as that user, not as the user's own account. To add a repository later,
+run `ghafk init` in the user's own clone and push the workflow file. The
+engine finds each owned repository with `.ghafk/WORKFLOW.md` on its default
+branch.
 
 ## Configuration
 
 | File | Holds |
 |---|---|
 | `<repository>/.ghafk/WORKFLOW.md` | `label`, `checks`, `worker`, `groomer`, `judge`, `reconciler`, `timeout`, then prompt text. `checks` is necessary for a merge. |
-| `~/.ghafk/config` | `default: <harness> <model>`, `progress: <columns>`, `interval: <minutes>` |
-| `~/.ghafk/repos` | Registered repository paths. Use `ghafk init` and `ghafk remove`. |
+| `~/.ghafk/config` | `default: <harness> <model>`, `progress: <columns>`, `interval: <minutes>`, `skip: <owner/name>` |
+| `~/.ghafk/repos` | Registered repository paths. Use `ghafk init` and `ghafk remove`. ghafk also works each owned repository with `.ghafk/WORKFLOW.md` on its default branch, cloned into `~/.ghafk/clones/`. |
 | `~/.ghafk/harnesses` | Extra or changed harness profiles: `name: parser command {model}`. |
 | `~/.ghafk/prompts/<role>.md` | Replaces the built-in prompt of `groom`, `worker`, `judge`, `reconcile` or `common`. It must keep the answer format of the built-in file, or ghafk parks the issue. |
 

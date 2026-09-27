@@ -18,6 +18,7 @@ var progressColumns = defaultColumns
 type settings struct {
 	progress []string
 	interval int
+	skip     []string
 }
 
 func configPath() (string, error) {
@@ -66,6 +67,11 @@ func loadSettings(path string) (settings, error) {
 				return s, fmt.Errorf("config: interval %q must be a number of minutes that divides 60, such as 2, 5 or 15", value)
 			}
 			s.interval = n
+		case "skip":
+			if strings.Count(value, "/") != 1 {
+				return s, fmt.Errorf("config: skip %q must name a repository as owner/name", value)
+			}
+			s.skip = append(s.skip, value)
 		}
 	}
 	return s, nil

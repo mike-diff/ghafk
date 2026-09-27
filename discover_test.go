@@ -1,0 +1,55 @@
+package main
+
+import (
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestDiscoveryKeepsOnlyOwnedSourceRepositoriesWithTheWorkflowFile(t *testing.T) {
+	out := strings.Join([]string{
+		"me/app\tfalse\tfalse\ttrue",
+		"me/fork-of-ghafk\ttrue\tfalse\ttrue",
+		"me/retired\tfalse\ttrue\ttrue",
+		"me/notes\tfalse\tfalse\tfalse",
+	}, "\n")
+	if got := parseDiscovery(out); !reflect.DeepEqual(got, []string{"me/app"}) {
+		t.Fatalf("discovered %v; a fork, an archived repository or one without the file must not be worked", got)
+	}
+}
+
+func TestDiscoveryLeavesRegisteredAndSkippedRepositoriesAlone(t *testing.T) {
+	seen := map[string]bool{"me/shift": true}
+	got := newRepos([]string{"Me/Shift", "me/Private", "me/new"}, seen, []string{"ME/private"})
+	if !reflect.DeepEqual(got, []string{"me/new"}) {
+		t.Fatalf("new repositories = %v; a registered one would be cloned twice, a skipped one worked", got)
+	}
+}
+
+func TestEngineReposClonesADiscoveredRepositoryOnlyForATick(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "api graphql") {
+			return "me/app\tfalse\tfalse\ttrue", nil
+		}
+		return "", nil
+	})
+	want := []target{{"me/app", filepath.Join(home, ".ghafk", "clones", "me", "app")}}
+
+	got, err := engineRepos(home, nil, false)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("status targets = %v, %v; want %v", got, err, want)
+	}
+	if called(*calls, "repo clone") {
+		t.Fatal("status cloned a repository")
+	}
+
+	if _, err := engineRepos(home, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	if !called(*calls, "repo clone me/app "+want[0].path) {
+		t.Fatalf("the tick did not clone the discovered repository: %v", *calls)
+	}
+}

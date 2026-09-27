@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -10,32 +11,37 @@ import (
 
 func status() error {
 	schedulerStatus()
-	account, err := engineAccount()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	cfg, err := loadMachineSettings()
+	if err != nil {
+		return err
+	}
+	targets, err := engineRepos(home, cfg.skip, false)
+	if err != nil {
+		return err
+	}
+	account, err := engineAccount(targets)
 	if err != nil {
 		account = "engine account: unknown: " + err.Error()
 	}
 	fmt.Println(account)
-	return repoStates()
+	repoStates(targets)
+	return nil
 }
 
-func engineAccount() (string, error) {
+func engineAccount(targets []target) (string, error) {
 	owner, expires, err := ownerAccount(".")
 	if err != nil {
 		return "", err
 	}
 	fmt.Println(tokenStatus(expires, time.Now()))
-	path, err := reposFile()
-	if err != nil {
-		return "", err
+	if len(targets) == 0 {
+		return fmt.Sprintf("engine account: %s (owner gh login; no repository to check an app on)", owner), nil
 	}
-	repos, err := readRepos(path)
-	if err != nil || len(repos) == 0 {
-		return fmt.Sprintf("engine account: %s (owner gh login; no registered repository to check an app on)", owner), err
-	}
-	name, err := ghOwner(repos[0], "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-	if err != nil {
-		return "", err
-	}
+	name := targets[0].name
 	mint := appMinter()
 	if token, login := engineIdentity(owner, func() (ghapp.Identity, error) { return mint(name) }); token != "" {
 		return fmt.Sprintf("engine account: %s[bot] (GitHub App, checked on %s)", login, name), nil
@@ -43,22 +49,16 @@ func engineAccount() (string, error) {
 	return fmt.Sprintf("engine account: %s (owner gh login)", owner), nil
 }
 
-func repoStates() error {
-	path, err := reposFile()
-	if err != nil {
-		return err
+func repoStates(targets []target) {
+	for _, t := range targets {
+		fmt.Printf("%s: %s\n", filepath.Base(t.path), repoState(t.path))
 	}
-	repos, err := readRepos(path)
-	if err != nil {
-		return err
-	}
-	for _, repo := range repos {
-		fmt.Printf("%s: %s\n", filepath.Base(repo), repoState(repo))
-	}
-	return nil
 }
 
 func repoState(repo string) string {
+	if _, err := os.Stat(repo); os.IsNotExist(err) {
+		return "found on GitHub; the next tick clones it"
+	}
 	henv, err := loadHarnessEnv()
 	if err != nil {
 		return "not ready: " + err.Error()

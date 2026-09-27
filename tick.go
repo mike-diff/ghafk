@@ -35,25 +35,16 @@ func tick() error {
 	}
 	ownerLogin = owner
 	mint := appMinter()
-	path, err := reposFile()
+	targets, err := engineRepos(home, cfg.skip, true)
 	if err != nil {
 		return err
 	}
-	repos, err := readRepos(path)
-	if err != nil {
-		return err
-	}
-	for _, repo := range repos {
-		name, err := ghOwner(repo, "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", filepath.Base(repo), err)
-			continue
-		}
+	for _, t := range targets {
 		var login string
-		engineToken, login = engineIdentity(owner, func() (ghapp.Identity, error) { return mint(name) })
+		engineToken, login = engineIdentity(owner, func() (ghapp.Identity, error) { return mint(t.name) })
 		sharedLogin = login == owner
-		if err := workRepo(home, repo, login, henv); err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", filepath.Base(repo), err)
+		if err := workRepo(home, t.path, login, henv); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", filepath.Base(t.path), err)
 		}
 	}
 	return nil
