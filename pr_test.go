@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -245,6 +246,61 @@ func TestMergeMatchesTheCheckedCommit(t *testing.T) {
 	if !called(*calls, "pr merge 73 --squash --subject feat(app): add a flag --body  --delete-branch --match-head-commit abc123") {
 		t.Fatalf("the merge does not pin the checked commit, so a later push could be merged unchecked: %v", *calls)
 	}
+}
+
+func mergeRun(t *testing.T, repo, work, after string) *prRun {
+	t.Helper()
+	return &prRun{repo: repo, work: work, def: "main", base: "demo", login: "owner", n: 5, prNum: "7", branch: "agent/5", after: after,
+		lease: "--force-with-lease=refs/heads/agent/5:" + after, card: openCard("repo", issue{Number: 5}, "owner"),
+		at: parkPlace{repo: "repo", base: "demo", login: "owner", label: "agent", target: "7", issue: 5}}
+}
+
+func mergeWorktree(t *testing.T) (repo, work, checked string) {
+	t.Helper()
+	repo = gitClone(t)
+	work = filepath.Join(t.TempDir(), "work")
+	if _, err := run(repo, "git", "worktree", "add", "-q", "-b", "agent/5", work); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(work, "git", "push", "-q", "origin", "agent/5"); err != nil {
+		t.Fatal(err)
+	}
+	checked, err := run(work, "git", "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return repo, work, checked
+}
+
+func TestMergeParksWhenTheBranchMovedAfterTheChecks(t *testing.T) {
+	calls := fakeGH(t, nil)
+	repo, work, checked := mergeWorktree(t)
+	if _, err := run(work, "git", "commit", "-q", "--allow-empty", "-m", "made during the judge"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mergeRun(t, repo, work, checked).merge(); err != nil {
+		t.Fatal(err)
+	}
+	if called(*calls, "pr merge") {
+		t.Fatalf("a commit made after the checks was merged: %v", *calls)
+	}
+	if !called(*calls, "issue edit 5 --add-label needs-human") {
+		t.Fatalf("the moved branch was not handed to the owner: %v", *calls)
+	}
+}
+
+func TestMergePushesAndPinsTheCheckedCommit(t *testing.T) {
+	calls := fakeGH(t, nil)
+	repo, work, checked := mergeWorktree(t)
+	if err := mergeRun(t, repo, work, checked).merge(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range *calls {
+		if strings.HasPrefix(c.String(), "pr merge 7") && strings.HasSuffix(c.String(), "--match-head-commit "+checked) {
+			return
+		}
+	}
+	t.Fatalf("the merge did not pin the checked commit %s: %v", checked, *calls)
 }
 
 func TestProtectedPathsHoldTheMerge(t *testing.T) {
