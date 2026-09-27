@@ -10,6 +10,9 @@ import (
 )
 
 func status() error {
+	if l, ok := installedEngine(); ok && !isEngineAccount(l) {
+		return engineStatusView(l)
+	}
 	schedulerStatus()
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -22,7 +25,7 @@ func status() error {
 	if err != nil {
 		return err
 	}
-	targets, err := engineRepos(home, cfg.skip, false)
+	targets, err := engineRepos(home, cfg.skip, cfg.repos, false)
 	if err != nil {
 		return err
 	}
