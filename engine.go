@@ -17,7 +17,7 @@ import (
 )
 
 type engineLayout struct {
-	user, home, bin string
+	user, home, bin, etc string
 }
 
 func (l engineLayout) config() string { return filepath.Join(l.home, ".ghafk") }
@@ -60,7 +60,7 @@ var readSecret = func(prompt string) (string, error) {
 	return strings.TrimSpace(line), err
 }
 
-func installRoot(content, dest string) error {
+func installRoot(content, dest, group string, mode os.FileMode) error {
 	tmp, err := os.CreateTemp("", "ghafk-engine-")
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func installRoot(content, dest string) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	_, err = runPrivileged("", "install", "-o", "root", "-g", rootGroup, "-m", "0644", tmp.Name(), dest)
+	_, err = runPrivileged("", "install", "-o", "root", "-g", group, "-m", fmt.Sprintf("%04o", mode), tmp.Name(), dest)
 	return err
 }
 
@@ -195,44 +195,45 @@ func askToken(l engineLayout) (string, error) {
 }
 
 func storeToken(l engineLayout, token string) error {
-	envPath := filepath.Join(l.config(), "env")
-	existing, _ := readAsEngine(l, envPath)
-	return writeAsEngine(l, renderEngineEnv(existing, token), 0o600, envPath)
+	existing, _ := runPrivileged("", "cat", filepath.Join(l.etc, "env"))
+	return installRoot(renderEngineEnv(existing, token), filepath.Join(l.etc, "env"), l.user, 0o640)
 }
 
 func hasToken(l engineLayout) bool {
-	_, err := runPrivileged("", "-u", l.user, "grep", "-q", "^GH_TOKEN=.", filepath.Join(l.config(), "env"))
+	_, err := runPrivileged("", "grep", "-q", "^GH_TOKEN=.", filepath.Join(l.etc, "env"))
 	return err == nil
 }
 
 func syncConfig(l engineLayout, personHome string) error {
 	src := filepath.Join(personHome, ".ghafk")
-	for _, name := range []string{"config", "harnesses"} {
-		data, err := os.ReadFile(filepath.Join(src, name))
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if err := writeAsEngine(l, string(data), 0o640, filepath.Join(l.config(), name)); err != nil {
+	for _, dir := range []string{l.etc, filepath.Join(l.etc, "prompts")} {
+		if _, err := runPrivileged("", "install", "-d", "-o", "root", "-g", rootGroup, "-m", "0755", dir); err != nil {
 			return err
 		}
 	}
-	for _, name := range []string{"app", "app.pem"} {
+	if err := migrateEngineConfig(l); err != nil {
+		return err
+	}
+	for _, name := range []string{"config", "harnesses", "app", "app.pem"} {
 		data, err := os.ReadFile(filepath.Join(src, name))
 		if os.IsNotExist(err) {
+			if name == "config" || name == "harnesses" {
+				runPrivileged("", "rm", "-f", filepath.Join(l.etc, name))
+			}
 			continue
 		}
 		if err != nil {
 			return err
 		}
-		if err := writeAsEngine(l, string(data), 0o600, filepath.Join(l.config(), name)); err != nil {
+		if err := installRoot(string(data), filepath.Join(l.etc, name), l.user, 0o640); err != nil {
 			return err
 		}
 	}
 	prompts, err := filepath.Glob(filepath.Join(src, "prompts", "*.md"))
-	if err != nil || len(prompts) == 0 {
+	if err != nil {
+		return err
+	}
+	if _, err := runPrivileged("", "find", filepath.Join(l.etc, "prompts"), "-mindepth", "1", "-delete"); err != nil {
 		return err
 	}
 	for _, p := range prompts {
@@ -240,11 +241,39 @@ func syncConfig(l engineLayout, personHome string) error {
 		if err != nil {
 			return err
 		}
-		if err := writeAsEngine(l, string(data), 0o640, filepath.Join(l.config(), "prompts", filepath.Base(p))); err != nil {
+		if err := installRoot(string(data), filepath.Join(l.etc, "prompts", filepath.Base(p)), l.user, 0o640); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func migrateEngineConfig(l engineLayout) error {
+	old := l.config()
+	if env, err := readAsEngine(l, filepath.Join(old, "env")); err == nil && !hasToken(l) {
+		for _, line := range strings.Split(env, "\n") {
+			if token, ok := strings.CutPrefix(strings.TrimSpace(line), "GH_TOKEN="); ok && token != "" {
+				if err := storeToken(l, token); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for _, name := range []string{"app", "app.pem"} {
+		data, err := readAsEngine(l, filepath.Join(old, name))
+		if err != nil || data == "" {
+			continue
+		}
+		if _, err := runPrivileged("", "test", "-e", filepath.Join(l.etc, name)); err == nil {
+			continue
+		}
+		if err := installRoot(data+"\n", filepath.Join(l.etc, name), l.user, 0o640); err != nil {
+			return err
+		}
+	}
+	_, err := runPrivileged("", "-u", l.user, "rm", "-rf", filepath.Join(old, "env"), filepath.Join(old, "app"), filepath.Join(old, "app.pem"),
+		filepath.Join(old, "config"), filepath.Join(old, "harnesses"), filepath.Join(old, "prompts"))
+	return err
 }
 
 func personGitIdentity() (string, string, error) {

@@ -8,7 +8,7 @@ import (
 
 const engineLabel = "ghafk.engine"
 
-var darwinEngine = engineLayout{user: "_ghafk", home: "/usr/local/var/ghafk", bin: "/usr/local/bin/ghafk"}
+var darwinEngine = engineLayout{user: "_ghafk", home: "/usr/local/var/ghafk", bin: "/usr/local/bin/ghafk", etc: "/usr/local/etc/ghafk"}
 
 func enginePathDarwin(home string) string {
 	return strings.Join([]string{home + "/.local/bin", home + "/.local/share/pnpm", home + "/.npm-global/bin", home + "/go/bin",
@@ -38,6 +38,8 @@ func enginePlist(l engineLayout, minutes int) string {
 	<dict>
 		<key>PATH</key>
 		<string>` + xmlText(enginePathDarwin(l.home)) + `</string>
+		<key>` + configDirEnv + `</key>
+		<string>` + xmlText(l.etc) + `</string>
 	</dict>
 	<key>Umask</key>
 	<integer>23</integer>

@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -27,6 +28,17 @@ var githubAPI = "https://api.github.com"
 type Identity struct {
 	Token string
 	Login string
+}
+
+// SecretMode reports whether a secret file is private: readable only by its owner,
+// or owned by root and readable by its group but writable only by root.
+func SecretMode(info os.FileInfo) bool {
+	perm := info.Mode().Perm()
+	if perm&0o077 == 0 {
+		return true
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	return ok && st.Uid == 0 && perm&0o037 == 0
 }
 
 // LoadConfig reads the GitHub App ID from dir/app and its private key from dir/app.pem.
@@ -48,7 +60,7 @@ func LoadConfig(dir string) (string, *rsa.PrivateKey, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	if !SecretMode(info) {
 		return "", nil, fmt.Errorf("%s: key file mode is %o, want 0600 or 0400", path, info.Mode().Perm())
 	}
 	raw, err := os.ReadFile(path)
