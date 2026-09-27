@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/mike-diff/ghafk/internal/ghapp"
@@ -20,10 +21,14 @@ func TestEngineIdentityFallsBackToTheOwner(t *testing.T) {
 
 func TestConsumedCountsTheBotsReaction(t *testing.T) {
 	fakeGH(t, func(cmd string) (string, error) {
-		return `[{"content":"+1","user":{"login":"ghafk[bot]"}}]`, nil
+		firstPage := strings.Repeat("outsider\n", 30)
+		if !strings.Contains(cmd, "--paginate") || !strings.Contains(cmd, "content=%2B1") {
+			return firstPage, nil
+		}
+		return firstPage + "ghafk[bot]\n", nil
 	})
 	c := &prComment{URL: "https://github.com/o/r/issues/1#issuecomment-123"}
 	if !consumed("repo", c, "ghafk") {
-		t.Fatal("the bot's own 👍 was not recognized, so every command would run again each tick")
+		t.Fatal("the bot's 👍 behind 30 other reactions was not seen, so the command runs again every tick")
 	}
 }
