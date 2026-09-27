@@ -125,15 +125,58 @@ func parseCodexJSON(stdout string) (string, Usage, bool) {
 	return reply, u, true
 }
 
+type opencodeEvent struct {
+	Type string `json:"type"`
+	Part struct {
+		MessageID string  `json:"messageID"`
+		Text      string  `json:"text"`
+		Cost      float64 `json:"cost"`
+		Tokens    *struct {
+			Total int `json:"total"`
+		} `json:"tokens"`
+	} `json:"part"`
+}
+
+func parseOpencodeJSON(stdout string) (string, Usage, bool) {
+	var texts []string
+	lastMessage := ""
+	u := Usage{Known: true, HasCost: true}
+	decoded := false
+	for _, line := range strings.Split(stdout, "\n") {
+		var ev opencodeEvent
+		if json.Unmarshal([]byte(line), &ev) != nil || ev.Type == "" {
+			continue
+		}
+		decoded = true
+		switch ev.Type {
+		case "text":
+			if ev.Part.MessageID != lastMessage {
+				texts, lastMessage = nil, ev.Part.MessageID
+			}
+			texts = append(texts, ev.Part.Text)
+		case "step_finish":
+			if ev.Part.Tokens != nil {
+				u.Tokens += ev.Part.Tokens.Total
+			}
+			u.Cost += ev.Part.Cost
+		}
+	}
+	if !decoded {
+		return "", Usage{}, false
+	}
+	return strings.Join(texts, ""), u, true
+}
+
 func parseText(stdout string) (string, Usage, bool) {
 	return stdout, Usage{}, true
 }
 
 var parsers = map[string]func(string) (string, Usage, bool){
-	"pi-json":     parsePIJSON,
-	"claude-json": parseClaudeJSON,
-	"codex-json":  parseCodexJSON,
-	"text":        parseText,
+	"pi-json":       parsePIJSON,
+	"claude-json":   parseClaudeJSON,
+	"codex-json":    parseCodexJSON,
+	"opencode-json": parseOpencodeJSON,
+	"text":          parseText,
 }
 
 // ParseOutput extracts the final reply and token usage. Output the parser cannot decode is returned as it is.

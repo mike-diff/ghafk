@@ -152,7 +152,7 @@ A profile is a command template and a parser. The template has a
 `{model}` placeholder. The parser reads the final reply of the agent and
 its token usage.
 
-The built-in profiles are `pi`, `omp`, `claude`, `codex` and `sesh`. To
+The built-in profiles are `pi`, `omp`, `claude`, `codex`, `sesh` and `opencode`. To
 add or change a profile, write one line for each profile in
 `~/.ghafk/harnesses`:
 

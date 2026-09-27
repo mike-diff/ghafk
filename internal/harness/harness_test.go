@@ -17,6 +17,22 @@ const codexFixture = `{"type":"thread.started","thread_id":"01a0da65-fe25-72a2-9
 const piFixture = `{"type":"tool_call","name":"sh","args":{"command":"ls"}}
 {"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"hi"}]},{"role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input":16455,"output":3,"cacheRead":3968,"cacheWrite":0,"totalTokens":20426,"cost":{"total":0.02408188}}}]}`
 
+const opencodeFixture = `{"type":"step_start","timestamp":1790542092926,"sessionID":"ses_f1b5fe8afffeAHit0IVVLVMARi","part":{"id":"prt_0e4a01a7b001eR8tYEv3salgEj","sessionID":"ses_f1b5fe8afffeAHit0IVVLVMARi","messageID":"msg_0e4a01a4000131etyavbbNLry6","type":"step-start"}}
+{"type":"text","timestamp":1790542092927,"sessionID":"ses_f1b5fe8afffeAHit0IVVLVMARi","part":{"id":"prt_0e4a01a7d001GSkCQWEIcPP1vt","sessionID":"ses_f1b5fe8afffeAHit0IVVLVMARi","messageID":"msg_0e4a01a4000131etyavbbNLry6","type":"text","text":"OK","time":{"start":1790542092927,"end":1790542092927}}}
+{"type":"step_finish","timestamp":1790542092932,"sessionID":"ses_f1b5fe8afffeAHit0IVVLVMARi","part":{"id":"prt_0e4a01a81001m4h1HInqXt2KYp","sessionID":"ses_f1b5fe8afffeAHit0IVVLVMARi","messageID":"msg_0e4a01a4000131etyavbbNLry6","type":"step-finish","reason":"stop","cost":0.000012,"tokens":{"total":2,"input":1,"output":1,"reasoning":0,"cache":{"read":0,"write":0}}}}`
+
+func TestParseOpencodeJSONFixture(t *testing.T) {
+	earlier := strings.Replace(strings.Split(opencodeFixture, "\n")[1], `"text":"OK"`, `"text":"planning"`, 1)
+	earlier = strings.Replace(earlier, "msg_0e4a01a4000131etyavbbNLry6", "msg_earlier", 1)
+	reply, u, ok := parseOpencodeJSON(earlier + "\n" + opencodeFixture)
+	if !ok || reply != "OK" {
+		t.Fatalf("reply = %q, %v; want the last message's text, not an earlier step's", reply, ok)
+	}
+	if u.Tokens != 2 || !u.HasCost || u.Cost != 0.000012 {
+		t.Fatalf("usage = %+v, want 2 tokens and the step cost", u)
+	}
+}
+
 func TestParseClaudeJSONFixture(t *testing.T) {
 	reply, u, ok := parseClaudeJSON(claudeFixture)
 	if !ok {
