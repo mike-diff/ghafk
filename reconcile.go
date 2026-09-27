@@ -63,7 +63,7 @@ func reconcileIssue(home, repo, base, login string, wf workflow, contract, befor
 	if err := clearStale(repo, work, branch); err != nil {
 		return err
 	}
-	if _, err := run(repo, "git", "worktree", "add", work, "-b", branch, after); err != nil {
+	if err := addWorktree(repo, work, "-b", branch, after); err != nil {
 		return err
 	}
 	defer discardWork(repo, work, branch)
