@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/mike-diff/ghafk/internal/ghapp"
 )
@@ -18,10 +19,11 @@ func status() error {
 }
 
 func engineAccount() (string, error) {
-	owner, err := ghOwner(".", "api", "user", "--jq", ".login")
+	owner, expires, err := ownerAccount(".")
 	if err != nil {
 		return "", err
 	}
+	fmt.Println(tokenStatus(expires, time.Now()))
 	path, err := reposFile()
 	if err != nil {
 		return "", err
