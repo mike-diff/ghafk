@@ -54,7 +54,7 @@ var commitTypes = map[string]bool{
 }
 
 func validCommitSubject(line string) bool {
-	if line == "" || len([]rune(line)) > 72 {
+	if line == "" || len([]rune(line)) > 72 || strings.ContainsAny(line, "@") || strings.Contains(line, "://") {
 		return false
 	}
 	for i := 0; i+1 < len(line); i++ {
@@ -108,7 +108,13 @@ func contractCommitLine(contract string) (string, bool) {
 }
 
 func fallbackCommitSubject(title string) string {
-	s := strings.Join(strings.Fields(removeIssueNumbers(title)), " ")
+	var words []string
+	for _, w := range strings.Fields(removeIssueNumbers(title)) {
+		if w = strings.ReplaceAll(w, "@", ""); w != "" && !strings.Contains(w, "://") {
+			words = append(words, w)
+		}
+	}
+	s := strings.Join(words, " ")
 	s = strings.TrimRight(s, ".")
 	r := []rune(s)
 	for i := 0; i < len(r) && r[i] >= 'A' && r[i] <= 'Z'; i++ {

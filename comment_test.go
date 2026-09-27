@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -187,6 +188,36 @@ func TestAgentTextInCardsAndQuestionsCannotMention(t *testing.T) {
 	for _, who := range []string{"dave", "erin"} {
 		if !strings.Contains(question, "`@"+who+"`") {
 			t.Errorf("the question leaves @%s live:\n%s", who, question)
+		}
+	}
+}
+
+func TestNeutralizeCoversURLClosingRefsAndLoneBackticks(t *testing.T) {
+	if got := neutralize("Fixes https://github.com/o/r/issues/7"); got != "Fixes `https://github.com/o/r/issues/7`" {
+		t.Errorf("a closing keyword with an issue URL stayed live: %q", got)
+	}
+	if got := neutralize("see `@octocat for details"); !strings.Contains(got, "`@octocat`") {
+		t.Errorf("a lone backtick kept @octocat outside a code span: %q", got)
+	}
+	if got := neutralize(neutralize("hi @octocat")); got != "hi `@octocat`" {
+		t.Errorf("neutralize is not stable when applied twice: %q", got)
+	}
+	if got := neutralize("mail a@octocat.com"); got != "mail a@octocat.com" {
+		t.Errorf("an email address was changed: %q", got)
+	}
+}
+
+func TestParkedErrorsCannotCloseTheirFence(t *testing.T) {
+	calls := fakeGH(t, nil)
+	at := parkPlace{repo: "repo", base: "demo", login: "owner", label: "agent", target: "5", issue: 5}
+	if err := parkOnError(at, "checks", "The checks failed.", errors.New("out\n```\n@octocat <img src=x>")); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range *calls {
+		for i, a := range c.args {
+			if a == "--body" && i+1 < len(c.args) && strings.Contains(c.args[i+1], "\n```\n@octocat") && !strings.Contains(c.args[i+1], "````") {
+				t.Fatalf("error text closed the code fence, so the rest renders as markdown:\n%s", c.args[i+1])
+			}
 		}
 	}
 }
