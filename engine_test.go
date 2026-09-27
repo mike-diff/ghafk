@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,5 +187,64 @@ func TestStatusReadsOnlyRegularEngineFiles(t *testing.T) {
 	}
 	if _, err := readEngineFile(link, 1<<20); err == nil {
 		t.Fatal("a status file linked to a device was read, so an agent can hang `ghafk status`")
+	}
+}
+
+func TestEngineConfigIsRootOwnedAndOnlyTheTokenMigrates(t *testing.T) {
+	var calls []string
+	var envContent string
+	old := runPrivileged
+	runPrivileged = func(stdin string, args ...string) (string, error) {
+		call := strings.Join(args, " ")
+		calls = append(calls, call)
+		if args[0] == "install" && args[len(args)-1] == "/etc/ghafk/env" {
+			data, _ := os.ReadFile(args[len(args)-2])
+			envContent = string(data)
+		}
+		switch {
+		case strings.HasSuffix(call, "/var/lib/ghafk/.ghafk/env"):
+			return "GH_TOKEN=old\nGIT_SSH_COMMAND=planted", nil
+		case strings.HasPrefix(call, "grep"), strings.HasPrefix(call, "cat /etc"):
+			return "", fmt.Errorf("absent")
+		}
+		return "", nil
+	}
+	t.Cleanup(func() { runPrivileged = old })
+	person := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(person, ".ghafk"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(person, ".ghafk", "config"), []byte("interval: 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := syncConfig(linuxEngine, person); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(calls, "\n")
+	for _, want := range []string{"install -o root -g ghafk -m 0640 ", " /etc/ghafk/config", " /etc/ghafk/env", "-u ghafk rm -rf /var/lib/ghafk/.ghafk/env"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("setup never ran %q:\n%s", want, joined)
+		}
+	}
+	for _, c := range calls {
+		if strings.Contains(c, "/var/lib/ghafk") && !strings.HasPrefix(c, "-u ghafk ") {
+			t.Errorf("root touches the engine home: %q", c)
+		}
+	}
+	if envContent != "GH_TOKEN=old\n" {
+		t.Errorf("migrated env = %q; want only the token, since agents could plant other lines in the old file", envContent)
+	}
+}
+
+func TestEngineReadsItsConfigFromTheRootOwnedDirectory(t *testing.T) {
+	unit := engineServiceUnit(linuxEngine)
+	if !strings.Contains(unit, "Environment="+configDirEnv+"=/etc/ghafk\n") {
+		t.Errorf("the service does not point the engine at /etc/ghafk:\n%s", unit)
+	}
+	if strings.Contains(unit, "ReadWritePaths=/etc") {
+		t.Error("the service can write its own config")
+	}
+	if plist := enginePlist(darwinEngine, 2); !strings.Contains(plist, "<key>"+configDirEnv+"</key>\n\t\t<string>/usr/local/etc/ghafk</string>") {
+		t.Errorf("the LaunchDaemon does not point the engine at /usr/local/etc/ghafk:\n%s", plist)
 	}
 }

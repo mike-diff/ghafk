@@ -41,11 +41,7 @@ func runHarness(args []string) error {
 		if len(rest) == 2 {
 			model = rest[1]
 		}
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		if err := loadEngineEnv(home); err != nil {
+		if err := loadEngineEnv(); err != nil {
 			return err
 		}
 		return harnessTest(rest[0], model)
@@ -101,11 +97,10 @@ func harnessDefault(profile, model string) error {
 	if _, err := resolveHarnessRole(profile, model, henv.Profiles); err != nil {
 		return err
 	}
-	home, err := os.UserHomeDir()
+	config, err := configPath()
 	if err != nil {
 		return err
 	}
-	config := filepath.Join(home, ".ghafk", "config")
 	line := fmt.Sprintf("default: %s %s", profile, model)
 	data, err := os.ReadFile(config)
 	if err != nil && !os.IsNotExist(err) {

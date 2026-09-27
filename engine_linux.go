@@ -113,10 +113,10 @@ func engineSetup() error {
 			return err
 		}
 	}
-	if err := installRoot(engineServiceUnit(l), unitPath(".service")); err != nil {
+	if err := installRoot(engineServiceUnit(l), unitPath(".service"), rootGroup, 0o644); err != nil {
 		return err
 	}
-	if err := installRoot(engineTimerUnit(cfg.interval), unitPath(".timer")); err != nil {
+	if err := installRoot(engineTimerUnit(cfg.interval), unitPath(".timer"), rootGroup, 0o644); err != nil {
 		return err
 	}
 	for _, args := range [][]string{{"systemctl", "daemon-reload"}, {"systemctl", "enable", "--now", engineUnitName + ".timer"}} {
@@ -175,7 +175,7 @@ func engineRemove(purge bool) error {
 	defer runPrivileged("", "-k")
 	runPrivileged("", "systemctl", "disable", "--now", engineUnitName+".timer")
 	runPrivileged("", "systemctl", "stop", engineUnitName+".service")
-	if _, err := runPrivileged("", "rm", "-f", unitPath(".service"), unitPath(".timer"), l.bin); err != nil {
+	if _, err := runPrivileged("", "rm", "-rf", unitPath(".service"), unitPath(".timer"), l.bin, l.etc); err != nil {
 		return err
 	}
 	if _, err := runPrivileged("", "systemctl", "daemon-reload"); err != nil {

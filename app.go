@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/mike-diff/ghafk/internal/ghapp"
@@ -42,9 +41,9 @@ func userHoldsLogin(login string) bool {
 }
 
 func appMinter() func(repo string) (ghapp.Identity, error) {
-	home, err := os.UserHomeDir()
+	dir, err := configDir()
 	if err != nil {
 		return func(string) (ghapp.Identity, error) { return ghapp.Identity{}, err }
 	}
-	return ghapp.Minter(filepath.Join(home, ".ghafk"))
+	return ghapp.Minter(dir)
 }

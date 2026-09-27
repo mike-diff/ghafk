@@ -7,7 +7,7 @@ import (
 
 const engineUnitName = "ghafk-engine"
 
-var linuxEngine = engineLayout{user: "ghafk", home: "/var/lib/ghafk", bin: "/usr/local/bin/ghafk"}
+var linuxEngine = engineLayout{user: "ghafk", home: "/var/lib/ghafk", bin: "/usr/local/bin/ghafk", etc: "/etc/ghafk"}
 
 func engineHardening(home string) []string {
 	return []string{
@@ -47,7 +47,7 @@ func enginePath(home string) string {
 func engineServiceUnit(l engineLayout) string {
 	return "[Unit]\nDescription=ghafk engine tick\nWants=network-online.target\nAfter=network-online.target\n\n" +
 		"[Service]\nType=oneshot\nUser=" + l.user + "\nGroup=" + l.user + "\nWorkingDirectory=" + l.home + "\n" +
-		"Environment=PATH=" + enginePath(l.home) + "\nExecStart=" + l.bin + " tick\nTimeoutStartSec=4h\n" +
+		"Environment=PATH=" + enginePath(l.home) + "\nEnvironment=" + configDirEnv + "=" + l.etc + "\nExecStart=" + l.bin + " tick\nTimeoutStartSec=4h\n" +
 		strings.Join(engineHardening(l.home), "\n") + "\n"
 }
 
@@ -57,7 +57,7 @@ func engineTimerUnit(minutes int) string {
 
 func sandboxArgs(l engineLayout, command ...string) []string {
 	args := []string{"systemd-run", "--wait", "--pipe", "--collect", "--quiet", "--uid=" + l.user, "--gid=" + l.user,
-		"-p", "WorkingDirectory=" + l.home, "-p", "Environment=PATH=" + enginePath(l.home)}
+		"-p", "WorkingDirectory=" + l.home, "-p", "Environment=PATH=" + enginePath(l.home), "-p", "Environment=" + configDirEnv + "=" + l.etc}
 	for _, p := range engineHardening(l.home) {
 		args = append(args, "-p", p)
 	}

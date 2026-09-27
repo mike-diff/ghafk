@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -11,11 +9,11 @@ import (
 )
 
 func loadHarnessEnv() (harness.Env, error) {
-	home, err := os.UserHomeDir()
+	dir, err := configDir()
 	if err != nil {
 		return harness.Env{}, err
 	}
-	return harness.LoadEnv(filepath.Join(home, ".ghafk"))
+	return harness.LoadEnv(dir)
 }
 
 func workerForLabels(wf workflow, labels []label) (harness.Role, error) {

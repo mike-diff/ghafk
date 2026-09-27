@@ -15,8 +15,8 @@ func rolePrompt(role string) string {
 }
 
 func promptFile(name string) string {
-	if home, err := os.UserHomeDir(); err == nil {
-		if data, err := os.ReadFile(filepath.Join(home, ".ghafk", "prompts", name+".md")); err == nil {
+	if dir, err := configDir(); err == nil {
+		if data, err := os.ReadFile(filepath.Join(dir, "prompts", name+".md")); err == nil {
 			return string(data)
 		}
 	}

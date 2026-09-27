@@ -32,7 +32,7 @@ func tick() (err error) {
 			fmt.Fprintf(os.Stderr, "ghafk: status file: %v\n", werr)
 		}
 	}()
-	if err := loadEngineEnv(home); err != nil {
+	if err := loadEngineEnv(); err != nil {
 		return err
 	}
 	henv, err := loadHarnessEnv()

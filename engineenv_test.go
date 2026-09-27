@@ -7,16 +7,14 @@ import (
 	"testing"
 )
 
-func writeEngineEnv(t *testing.T, text string, mode os.FileMode) string {
+func loadEngineEnvText(t *testing.T, text string, mode os.FileMode) error {
 	t.Helper()
-	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, ".ghafk"), 0o700); err != nil {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "env"), []byte(text), mode); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".ghafk", "env"), []byte(text), mode); err != nil {
-		t.Fatal(err)
-	}
-	return home
+	t.Setenv(configDirEnv, dir)
+	return loadEngineEnv()
 }
 
 func useOwnerToken(t *testing.T) {
@@ -28,7 +26,7 @@ func useOwnerToken(t *testing.T) {
 func TestEngineEnvGivesTheTokenOnlyToGhafksOwnCalls(t *testing.T) {
 	useOwnerToken(t)
 	t.Setenv("GHAFK_TEST_KEY", "")
-	if err := loadEngineEnv(writeEngineEnv(t, "# engine\nGH_TOKEN=secret-token\nGHAFK_TEST_KEY=harness-key\n", 0o600)); err != nil {
+	if err := loadEngineEnvText(t, "# engine\nGH_TOKEN=secret-token\nGHAFK_TEST_KEY=harness-key\n", 0o600); err != nil {
 		t.Fatal(err)
 	}
 	calls := fakeGH(t, nil)
@@ -49,7 +47,7 @@ func TestEngineEnvGivesTheTokenOnlyToGhafksOwnCalls(t *testing.T) {
 
 func TestEngineEnvMustBeOwnerOnly(t *testing.T) {
 	useOwnerToken(t)
-	if err := loadEngineEnv(writeEngineEnv(t, "GH_TOKEN=x\n", 0o640)); err == nil {
+	if err := loadEngineEnvText(t, "GH_TOKEN=x\n", 0o640); err == nil {
 		t.Fatal("a group-readable env file was accepted, so other accounts can read the token")
 	}
 }
@@ -57,7 +55,7 @@ func TestEngineEnvMustBeOwnerOnly(t *testing.T) {
 func TestEngineEnvRejectsMalformedLines(t *testing.T) {
 	useOwnerToken(t)
 	for _, text := range []string{"export GH_TOKEN=x\n", "gh_token=x\n", "GH_TOKEN\n"} {
-		if err := loadEngineEnv(writeEngineEnv(t, text, 0o600)); err == nil {
+		if err := loadEngineEnvText(t, text, 0o600); err == nil {
 			t.Errorf("%q was accepted", strings.TrimSpace(text))
 		}
 	}
