@@ -32,10 +32,18 @@ func steer(repo, base, login string, wf workflow) (map[int]bool, error) {
 	targets := map[int]*commandTarget{}
 	var order []int
 	var open []issue
-	if err := ghJSON(repo, []string{"issue", "list", "--state", "open", "--limit", "500", "--json", "number,author,title,body,comments,labels"}, &open); err != nil {
-		return held, err
+	for _, filter := range [][]string{{"--label", wf.label}, {"--label", "needs-human"}, {"--search", "sort:updated-desc", "--limit", "100"}} {
+		var list []issue
+		args := append([]string{"issue", "list", "--state", "open", "--limit", "500", "--json", "number,author,title,body,comments,labels"}, filter...)
+		if err := ghJSON(repo, args, &list); err != nil {
+			return held, err
+		}
+		open = append(open, list...)
 	}
 	for _, is := range open {
+		if targets[is.Number] != nil {
+			continue
+		}
 		targets[is.Number] = &commandTarget{number: is.Number, author: is.Author.Login, title: is.Title, body: is.Body, comments: is.Comments, labeled: issueLabeled(is.Labels, wf.label), parked: issueLabeled(is.Labels, "needs-human")}
 		order = append(order, is.Number)
 	}
