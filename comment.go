@@ -87,14 +87,35 @@ func fenced(text string) string {
 }
 
 var (
-	closingRef = regexp.MustCompile(`(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:[\w.-]+/[\w.-]+)?#\d+)`)
-	mention    = regexp.MustCompile("(^|[^\\w`])@([A-Za-z0-9][A-Za-z0-9-]*)")
+	closingRef = regexp.MustCompile(`(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:[\w.-]+/[\w.-]+)?#\d+|https?://github\.com/[\w.-]+/[\w.-]+/(?:issues|pull)/\d+)`)
+	mention    = regexp.MustCompile("@[A-Za-z0-9][A-Za-z0-9-]*")
 )
 
 func neutralize(s string) string {
 	s = strings.ReplaceAll(s, "<!--", "&lt;!--")
 	s = closingRef.ReplaceAllString(s, "${1}${2}`${3}`")
-	return mention.ReplaceAllString(s, "${1}`@${2}`")
+	var b strings.Builder
+	last := 0
+	for _, m := range mention.FindAllStringIndex(s, -1) {
+		start, end := m[0], m[1]
+		before, after := byte(0), byte(0)
+		if start > 0 {
+			before = s[start-1]
+		}
+		if end < len(s) {
+			after = s[end]
+		}
+		if isWordByte(before) || before == '`' && after == '`' {
+			continue
+		}
+		b.WriteString(s[last:start] + "`" + s[start:end] + "`")
+		last = end
+	}
+	return b.String() + s[last:]
+}
+
+func isWordByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_'
 }
 
 func exitCodeOf(err error) (int, bool) {
@@ -154,7 +175,7 @@ func evidenceDetails(output string) string {
 	if len(tail) > evidenceLines {
 		tail = tail[len(tail)-evidenceLines:]
 	}
-	return "<details>\n<summary>Evidence</summary>\n\n```\n" + strings.Join(matched, "\n") + "\n```\n\n```\n" + strings.Join(tail, "\n") + "\n```\n\n</details>"
+	return "<details>\n<summary>Evidence</summary>\n\n" + fenced(strings.Join(matched, "\n")) + "\n\n" + fenced(strings.Join(tail, "\n")) + "\n\n</details>"
 }
 
 func evidenceLine(line string) bool {
@@ -221,7 +242,7 @@ func retryFooter() string {
 }
 
 func parkOnError(at parkPlace, role, sentence string, err error) error {
-	spec := commentSpec{kind: "park", role: role, number: at.issue, sentence: sentence, body: "```\n" + err.Error() + "\n```", footer: retryFooter()}
+	spec := commentSpec{kind: "park", role: role, number: at.issue, sentence: sentence, body: fenced(err.Error()), footer: retryFooter()}
 	return park(at, sentence, spec)
 }
 

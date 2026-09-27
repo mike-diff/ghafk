@@ -196,3 +196,17 @@ func TestFallbackKeepsAnAcronymAtTheStart(t *testing.T) {
 		t.Fatalf("fallback no longer lowercases an ordinary first word: %q", got)
 	}
 }
+
+func TestCommitSubjectsCannotMentionOrCloseElsewhere(t *testing.T) {
+	for _, line := range []string{
+		"feat(cli): add flag, fixes https://github.com/o/r/issues/7",
+		"feat(cli): add flag for @octocat",
+	} {
+		if validCommitSubject(line) {
+			t.Errorf("%q was accepted; on merge it can close another repo's issue or ping a user", line)
+		}
+	}
+	if got := fallbackCommitSubject("Add flag for @octocat, see https://github.com/o/r/issues/7"); strings.Contains(got, "@") || strings.Contains(got, "://") {
+		t.Errorf("fallback subject kept a mention or URL: %q", got)
+	}
+}
