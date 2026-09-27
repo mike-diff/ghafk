@@ -58,7 +58,7 @@ type pr struct {
 
 func listPRs(repo string) ([]pr, error) {
 	var all []pr
-	if err := ghJSON(repo, []string{"pr", "list", "--state", "open", "--limit", "500", "--json", "number,headRefName,isCrossRepository,author,body,comments,reviews"}, &all); err != nil {
+	if err := ghJSON(repo, []string{"pr", "list", "--state", "open", "--author", ownerLogin, "--limit", "500", "--json", "number,headRefName,isCrossRepository,author,body,comments,reviews"}, &all); err != nil {
 		return nil, err
 	}
 	var own []pr

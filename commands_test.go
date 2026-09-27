@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseCommand(t *testing.T) {
 	cases := []struct {
@@ -132,5 +135,35 @@ func TestARetryOlderThanTheLatestParkIsIgnored(t *testing.T) {
 	steerIssue("repo", "demo", "ghafk", workflow{label: "agent"}, target)
 	if called(*calls, "issue edit 4 --add-label agent") {
 		t.Fatalf("a /retry from before the latest park requeued the issue, so it can loop every tick: %v", *calls)
+	}
+}
+
+func TestSteerFindsLabeledIssuesBeyondAnOutsiderFlood(t *testing.T) {
+	stubWriters(t)
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "issue list") && strings.Contains(cmd, "--label agent") {
+			return `[{"number":9,"title":"t","body":"b","labels":[{"name":"agent"}],"comments":[{"body":"/stop","author":{"login":"owner"},"authorAssociation":"OWNER","url":"https://github.com/o/r/issues/9#issuecomment-1","createdAt":"2026-09-26T10:00:00Z"}]}]`, nil
+		}
+		if strings.HasPrefix(cmd, "issue list") || strings.HasPrefix(cmd, "pr list") {
+			return "[]", nil
+		}
+		return "", nil
+	})
+	if _, err := steer("repo", "demo", "ghafk", workflow{label: "agent"}); err != nil {
+		t.Fatal(err)
+	}
+	if !called(*calls, "issue edit 9 --remove-label agent") {
+		t.Fatalf("a /stop on a labeled issue was missed when the open-issue list was full of other issues: %v", *calls)
+	}
+}
+
+func TestListPRsAsksGitHubForTheOwnersPRsOnly(t *testing.T) {
+	ownerLogin = "owner"
+	calls := fakeGH(t, func(string) (string, error) { return "[]", nil })
+	if _, err := listPRs("repo"); err != nil {
+		t.Fatal(err)
+	}
+	if !called(*calls, "pr list --state open --author owner") {
+		t.Fatalf("PRs are filtered after a 500-item list, so 500 fork PRs hide the engine's own: %v", *calls)
 	}
 }
