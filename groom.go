@@ -48,7 +48,7 @@ func groomIssue(home, repo, base, login string, wf workflow, is issue) error {
 	answer, tokens := reportRoleUsage(base, is.Number, wf.groomer, out.String())
 	answer = answerFrom(answer, "contract:", "question:")
 	switch {
-	case strings.HasPrefix(answer, "contract:"):
+	case strings.HasPrefix(answer, "contract:") && strings.TrimSpace(strings.TrimPrefix(answer, "contract:")) != "":
 		stepf(base, is.Number, "contract")
 		c.st.Contract = strings.TrimSpace(strings.TrimPrefix(answer, "contract:"))
 		c.finish("done", tokens)

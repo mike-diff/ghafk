@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -58,7 +60,7 @@ var readSecret = func(prompt string) (string, error) {
 	return strings.TrimSpace(line), err
 }
 
-func installAs(l engineLayout, content string, mode os.FileMode, owner, dest string) error {
+func installRoot(content, dest string) error {
 	tmp, err := os.CreateTemp("", "ghafk-engine-")
 	if err != nil {
 		return err
@@ -71,12 +73,69 @@ func installAs(l engineLayout, content string, mode os.FileMode, owner, dest str
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	group := owner
-	if owner == "root" {
-		group = rootGroup
-	}
-	_, err = runPrivileged("", "install", "-o", owner, "-g", group, "-m", fmt.Sprintf("%04o", mode), tmp.Name(), dest)
+	_, err = runPrivileged("", "install", "-o", "root", "-g", rootGroup, "-m", "0644", tmp.Name(), dest)
 	return err
+}
+
+func writeAsEngine(l engineLayout, content string, mode os.FileMode, dest string) error {
+	_, err := runPrivileged(content, "-u", l.user, l.bin, "engine", "write", dest, fmt.Sprintf("%04o", mode))
+	return err
+}
+
+func readAsEngine(l engineLayout, path string) (string, error) {
+	return runPrivileged("", "-u", l.user, "cat", path)
+}
+
+func engineWrite(args []string) error {
+	if len(args) != 2 {
+		usage()
+	}
+	dest := args[0]
+	mode, err := strconv.ParseUint(args[1], 8, 32)
+	if err != nil || mode&^0o777 != 0 {
+		return fmt.Errorf("mode %q must be octal permission bits", args[1])
+	}
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(dest)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".ghafk-write-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(os.FileMode(mode)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), dest)
+}
+
+func readEngineFile(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	return io.ReadAll(io.LimitReader(f, limit))
 }
 
 func tokenURL() string {
@@ -137,12 +196,12 @@ func askToken(l engineLayout) (string, error) {
 
 func storeToken(l engineLayout, token string) error {
 	envPath := filepath.Join(l.config(), "env")
-	existing, _ := runPrivileged("", "cat", envPath)
-	return installAs(l, renderEngineEnv(existing, token), 0o600, l.user, envPath)
+	existing, _ := readAsEngine(l, envPath)
+	return writeAsEngine(l, renderEngineEnv(existing, token), 0o600, envPath)
 }
 
 func hasToken(l engineLayout) bool {
-	_, err := runPrivileged("", "grep", "-q", "^GH_TOKEN=.", filepath.Join(l.config(), "env"))
+	_, err := runPrivileged("", "-u", l.user, "grep", "-q", "^GH_TOKEN=.", filepath.Join(l.config(), "env"))
 	return err == nil
 }
 
@@ -156,7 +215,7 @@ func syncConfig(l engineLayout, personHome string) error {
 		if err != nil {
 			return err
 		}
-		if err := installAs(l, string(data), 0o640, l.user, filepath.Join(l.config(), name)); err != nil {
+		if err := writeAsEngine(l, string(data), 0o640, filepath.Join(l.config(), name)); err != nil {
 			return err
 		}
 	}
@@ -168,7 +227,7 @@ func syncConfig(l engineLayout, personHome string) error {
 		if err != nil {
 			return err
 		}
-		if err := installAs(l, string(data), 0o600, l.user, filepath.Join(l.config(), name)); err != nil {
+		if err := writeAsEngine(l, string(data), 0o600, filepath.Join(l.config(), name)); err != nil {
 			return err
 		}
 	}
@@ -176,15 +235,12 @@ func syncConfig(l engineLayout, personHome string) error {
 	if err != nil || len(prompts) == 0 {
 		return err
 	}
-	if _, err := runPrivileged("", "install", "-d", "-o", l.user, "-g", l.user, "-m", "0750", filepath.Join(l.config(), "prompts")); err != nil {
-		return err
-	}
 	for _, p := range prompts {
 		data, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		if err := installAs(l, string(data), 0o640, l.user, filepath.Join(l.config(), "prompts", filepath.Base(p))); err != nil {
+		if err := writeAsEngine(l, string(data), 0o640, filepath.Join(l.config(), "prompts", filepath.Base(p))); err != nil {
 			return err
 		}
 	}
@@ -257,6 +313,8 @@ func runEngine(args []string) error {
 		return engineStart()
 	case "stop":
 		return engineStop()
+	case "write":
+		return engineWrite(args[1:])
 	case "remove":
 		purge := len(args) == 2 && args[1] == "--purge"
 		if len(args) > 2 || len(args) == 2 && !purge {
@@ -291,7 +349,7 @@ func engineReplaceToken() error {
 func engineStatusView(l engineLayout) error {
 	fmt.Println(sanitizeTerminal(engineServiceState(l)))
 	fmt.Println()
-	data, err := os.ReadFile(statusFile(l.home))
+	data, err := readEngineFile(statusFile(l.home), 1<<20)
 	if os.IsPermission(err) {
 		if reexecWithGroup(l) {
 			return nil
@@ -310,7 +368,7 @@ func engineStatusView(l engineLayout) error {
 		return fmt.Errorf("%s: %v", statusFile(l.home), err)
 	}
 	fmt.Println(sanitizeTerminal(renderEngineStatus(st, time.Now())))
-	if log, err := os.ReadFile(filepath.Join(l.config(), "tick.log")); err == nil {
+	if log, err := readEngineFile(filepath.Join(l.config(), "tick.log"), 2*maxTickLog); err == nil {
 		fmt.Println("\n" + sanitizeTerminal(tailLines(string(log), 20)))
 	}
 	return nil

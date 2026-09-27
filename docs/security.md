@@ -41,6 +41,9 @@ not as you.
   change them.
 - Setup runs each privileged step as its own `sudo` command. It never runs
   a program or a shell file of the engine account in your terminal.
+- Setup writes the files in the engine home as the engine account, never as
+  root. A link that an agent puts in the engine home cannot make root read
+  or change another file.
 
 These limits stay:
 

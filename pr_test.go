@@ -367,3 +367,27 @@ func TestMovingAWorkflowOutOfGithubHoldsTheMerge(t *testing.T) {
 		t.Fatalf("the held change was not handed to the owner: %v", *calls)
 	}
 }
+
+func TestAUnicodeWorkflowNameHoldsTheMerge(t *testing.T) {
+	calls := fakeGH(t, nil)
+	repo := gitClone(t)
+	work := filepath.Join(t.TempDir(), "work")
+	if _, err := run(repo, "git", "worktree", "add", "-q", "-b", "agent/5", work); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(work, ".github", "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, ".github", "workflows", "audit-é.yml"), []byte("# comment\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", "add workflow"}} {
+		if _, err := run(work, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	held, err := mergeRun(t, repo, work, "").holdProtected()
+	if err != nil || !held || !called(*calls, "issue edit 5 --add-label needs-human") {
+		t.Fatalf("held = %v, %v; git quotes a non-ASCII path, and the quoted workflow merged unattended", held, err)
+	}
+}
