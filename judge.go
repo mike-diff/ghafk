@@ -87,7 +87,7 @@ func renderVerdict(kind, sha string, items map[int]cardItem) string {
 	var b strings.Builder
 	b.WriteString(head + "\n\n| # | Result | Evidence |\n|---|---|---|")
 	for _, k := range keys {
-		b.WriteString("\n| " + strconv.Itoa(k) + " | " + items[k].Status + " | " + strings.ReplaceAll(neutralize(items[k].Reason), "|", "\\|") + " |")
+		b.WriteString("\n| " + strconv.Itoa(k) + " | " + items[k].Status + " | " + strings.ReplaceAll(neutralize(clipReason(items[k].Reason)), "|", "\\|") + " |")
 	}
 	return b.String()
 }

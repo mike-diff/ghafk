@@ -218,7 +218,7 @@ func (r *prRun) judge() (bool, error) {
 	items := parseItems(verdict)
 	r.card.setItems(items)
 	if err := postVerdict(r.repo, r.prNum, r.pick.Author.Login, r.login, kind, renderVerdict(kind, r.after, items)); err != nil {
-		return false, err
+		return true, parkOnError(r.at, "judge", "Posting the verdict failed.", err)
 	}
 	r.st.Verdict, r.st.VerdictSha = kind, r.after
 	if err := r.putBody(""); err != nil {
@@ -297,27 +297,27 @@ func (r *prRun) repair() (bool, error) {
 	}
 	status, changed, err := workChanges(r.work, r.after)
 	if err != nil {
-		return true, err
+		return true, parkOnError(r.at, "worker", "ghafk could not read the repair worker's changes.", err)
 	}
 	if !changed {
 		spec := commentSpec{kind: "repair", role: "worker", number: r.n, sentence: "The repair worker made no changes."}
 		return false, postComment(r.repo, r.prNum, spec, r.pick.Comments, r.login)
 	}
 	if err := commitChanges(r.work, status, "fix: repair checks for #"+r.issueNum); err != nil {
-		return true, err
+		return true, parkOnError(r.at, "commit", "The repair commit failed.", err)
 	}
 	sha, err := run(r.work, "git", "rev-parse", "HEAD")
 	if err != nil {
-		return true, err
+		return true, parkOnError(r.at, "commit", "The repair commit failed.", err)
 	}
 	if _, err := run(r.work, "git", "push", r.lease, "origin", r.branch); err != nil {
-		return true, err
+		return true, parkOnError(r.at, "push", "The repair push was rejected.", err)
 	}
 	r.card.finish("done", tokens)
 	r.card.queue()
 	r.st = prState{Repairs: r.st.Repairs + 1}
 	if err := r.putBody(summaryLines(answer)); err != nil {
-		return true, err
+		return true, parkOnError(r.at, "pr", "ghafk could not record the repair on the pull request.", err)
 	}
 	spec := commentSpec{kind: "repair", role: "worker", number: r.n, sentence: "Repair 1 pushed " + sha + "."}
 	return true, postComment(r.repo, r.prNum, spec, r.pick.Comments, r.login)

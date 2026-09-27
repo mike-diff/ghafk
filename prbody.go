@@ -42,7 +42,25 @@ func summaryLines(output string) string {
 	if end-start > 5 {
 		start = end - 5
 	}
-	return strings.TrimSpace(strings.Join(lines[start:end], "\n"))
+	summary := []rune(strings.TrimSpace(strings.Join(lines[start:end], "\n")))
+	if len(summary) > maxSummary {
+		summary = summary[:maxSummary]
+	}
+	return string(summary)
+}
+
+const (
+	maxSummary  = 2000
+	maxStatRows = 100
+)
+
+func capStat(stat string) string {
+	lines := strings.Split(stat, "\n")
+	if len(lines) <= maxStatRows+1 {
+		return stat
+	}
+	last := lines[len(lines)-1]
+	return strings.Join(lines[:maxStatRows], "\n") + "\n ... " + strconv.Itoa(len(lines)-1-maxStatRows) + " more files\n" + last
 }
 
 func bodySummary(body string) string {
@@ -82,7 +100,7 @@ func renderPRBody(n int, summary, stat string, st prState) string {
 	var b strings.Builder
 	b.WriteString("Closes #" + strconv.Itoa(n) + "\n\n")
 	b.WriteString("## Summary\n\n" + neutralize(scrubEmDashes(strings.TrimSpace(summary))) + "\n\n")
-	b.WriteString("## Changes\n\n```\n" + trimBlankLines(stat) + "\n```\n\n")
+	b.WriteString("## Changes\n\n```\n" + capStat(trimBlankLines(stat)) + "\n```\n\n")
 	b.WriteString("## Status\n\n| Step | Result | At |\n|---|---|---|\n")
 	b.WriteString(prStatusRow("Checks", st.Checks, st.ChecksSha) + "\n")
 	b.WriteString(prStatusRow("Judge", st.Verdict, st.VerdictSha) + "\n")
