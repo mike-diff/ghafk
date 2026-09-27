@@ -99,11 +99,30 @@ func TestModelOutputInCommentsIsFenced(t *testing.T) {
 	}
 }
 
+func TestWorkPRParksAnOutsiderIssueWhoseTextIsNotApproved(t *testing.T) {
+	stubWriters(t, "owner")
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "issue view 5") {
+			return `{"number":5,"author":{"login":"outsider"},"title":"t","body":"edited after /start","comments":[],"state":"OPEN","labels":[{"name":"agent"}]}`, nil
+		}
+		return "", nil
+	})
+	prs := []pr{{Number: 7, HeadRefName: "agent/5"}}
+	handled, err := workPR(t.TempDir(), t.TempDir(), "repo", "owner", workflow{label: "agent", checks: "true"}, prs)
+	if err != nil || !handled {
+		t.Fatalf("workPR = %v, %v; an unapproved outsider text went on to checks and repair", handled, err)
+	}
+	if !called(*calls, "issue comment 5") || !called(*calls, "issue edit 5 --add-label needs-human --remove-label agent") {
+		t.Fatalf("the issue was not parked for a new /start: %v", *calls)
+	}
+}
+
 func TestWorkPRWithoutChecksParksTheIssue(t *testing.T) {
+	stubWriters(t, "owner")
 	calls := fakeGH(t, func(cmd string) (string, error) {
 		switch {
 		case strings.HasPrefix(cmd, "issue view 5"):
-			return `{"number":5,"title":"t","body":"b","comments":[],"state":"OPEN","labels":[{"name":"agent"}]}`, nil
+			return `{"number":5,"author":{"login":"owner"},"title":"t","body":"b","comments":[],"state":"OPEN","labels":[{"name":"agent"}]}`, nil
 		}
 		return "", nil
 	})
