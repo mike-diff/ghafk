@@ -236,15 +236,19 @@ func (r *prRun) judge() (bool, error) {
 func (r *prRun) merge() error {
 	stepf(r.base, r.n, "merge")
 	r.card.begin("Merge", "")
-	if _, err := run(r.work, "git", "push", r.lease, "origin", r.branch); err != nil {
-		return err
-	}
 	head, err := run(r.work, "git", "rev-parse", "HEAD")
 	if err != nil {
 		return err
 	}
+	if head != r.after {
+		spec := commentSpec{kind: "park", role: "merge", number: r.n, sentence: "The branch changed after the checks ran.", body: "ghafk checked `" + shortSha(r.after) + "`, but the worktree is now at `" + shortSha(head) + "`. ghafk merges only the commit that it checked.", footer: retryFooter()}
+		return park(r.at, "branch changed after checks", spec)
+	}
+	if _, err := run(r.work, "git", "push", r.lease, "origin", r.after+":refs/heads/"+r.branch); err != nil {
+		return err
+	}
 	worktreeRemove(r.repo, r.work)
-	if merged, err := mergeOrPark(r.at, r.prNum, commitSubject(contractText(r.is.Comments, r.login), r.is.Title), head); !merged || err != nil {
+	if merged, err := mergeOrPark(r.at, r.prNum, commitSubject(contractText(r.is.Comments, r.login), r.is.Title), r.after); !merged || err != nil {
 		return err
 	}
 	r.card.merged()
