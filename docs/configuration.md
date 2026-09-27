@@ -178,6 +178,8 @@ contain `A-Z a-z 0-9 . _ : / @ -`.
 | `~/.ghafk/prompts/` | Your replacements for the built-in [prompts](prompts.md). |
 | `~/.ghafk/app`, `~/.ghafk/app.pem` | The App ID and private key of an optional [GitHub App](github-app.md). |
 | `~/.ghafk/work/` | The worktrees of runs that are in progress. |
+| `~/.ghafk/status.json` | The result of the last tick: time, error, token expiry, account, repositories and installed harnesses. ghafk writes it at the end of each tick, also when the tick fails. |
+| `~/.ghafk/tick.log` | The output of the ticks. At 1 MB, ghafk moves it to `tick.log.1` and starts a new file. |
 | `~/.config/systemd/user/ghafk.{service,timer}` | Linux: the units that `ghafk start` writes. To uninstall ghafk, run `ghafk stop` and delete them. |
 | `~/Library/LaunchAgents/ghafk.tick.plist` | macOS: the agent that `ghafk start` writes. To uninstall ghafk, run `ghafk stop` and delete it. |
 | `~/Library/Logs/ghafk.log` | macOS: the tick log. `ghafk status` shows its last 20 lines. |

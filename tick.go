@@ -12,11 +12,26 @@ import (
 	"github.com/mike-diff/ghafk/internal/harness"
 )
 
-func tick() error {
+func tick() (err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
+	if stop, logErr := startTickLog(home); logErr == nil {
+		defer stop()
+	} else {
+		fmt.Fprintf(os.Stderr, "ghafk: tick log: %v\n", logErr)
+	}
+	st := engineStatus{Harnesses: []string{}}
+	defer func() {
+		st.Time = time.Now().UTC().Format(time.RFC3339)
+		if err != nil {
+			st.Error = err.Error()
+		}
+		if werr := writeEngineStatus(home, st); werr != nil {
+			fmt.Fprintf(os.Stderr, "ghafk: status file: %v\n", werr)
+		}
+	}()
 	if err := loadEngineEnv(home); err != nil {
 		return err
 	}
@@ -24,6 +39,7 @@ func tick() error {
 	if err != nil {
 		return err
 	}
+	st.Harnesses = installedHarnesses(henv)
 	cfg, err := loadMachineSettings()
 	if err != nil {
 		return err
@@ -37,6 +53,10 @@ func tick() error {
 		fmt.Println(w)
 	}
 	ownerLogin = owner
+	st.Owner = owner
+	if !expires.IsZero() {
+		st.TokenExpires = expires.UTC().Format(time.RFC3339)
+	}
 	mint := appMinter()
 	targets, err := engineRepos(home, cfg.skip, true)
 	if err != nil {
@@ -51,9 +71,13 @@ func tick() error {
 			return id.Token, err
 		}
 		sharedLogin = login == owner
+		st.Account = login
+		state := "ready"
 		if err := workRepo(home, t.path, login, henv); err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", filepath.Base(t.path), err)
+			state = "error: " + err.Error()
 		}
+		st.Repos = append(st.Repos, repoStatus{Name: t.name, State: state})
 	}
 	return nil
 }
