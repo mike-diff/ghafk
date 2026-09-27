@@ -76,13 +76,19 @@ flowchart TD
    ghafk harness test <harness> <model>
    ```
 
-3. Register a repository. Then commit the file that ghafk writes.
+3. Register a repository. Then commit and push the file that ghafk writes.
 
    ```sh
    cd ~/src/your-repo
    ghafk init
    git add .ghafk/WORKFLOW.md && git commit -m "chore: configure ghafk" && git push
    ```
+
+   ghafk also works each repository that you own where
+   `.ghafk/WORKFLOW.md` is on the default branch. If ghafk runs as a
+   [separate user](docs/separate-user.md), run `ghafk init` in your own
+   clone and push. The engine finds the repository on its next tick. See
+   [repositories](docs/configuration.md#repositories).
 
 4. Start the timer.
 

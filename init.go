@@ -51,6 +51,7 @@ func initRepo(path string) error {
 	fmt.Printf("ghafk: registered %s (%s)\n", root, name)
 	fmt.Println("ghafk: " + note)
 	fmt.Println("ghafk: review and commit the workflow file; ghafk never commits or pushes")
+	fmt.Println("ghafk: after you push it to the default branch, an engine that runs as another user finds the repository on its next tick")
 	if wf, err := os.ReadFile(workflow); err == nil && !strings.Contains(string(wf), "\nchecks:") {
 		fmt.Println("ghafk: the workflow file has no checks line; add one, or every pull request parks before merge")
 	}
@@ -113,6 +114,13 @@ func removeRepo(path string) error {
 		if root, err = filepath.Abs(path); err != nil {
 			return err
 		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(root, filepath.Join(home, ".ghafk", "clones")+string(filepath.Separator)) {
+		return fmt.Errorf("%s was found on GitHub, not registered; delete .ghafk/WORKFLOW.md from its default branch, or add a skip line to ~/.ghafk/config", root)
 	}
 	file, err := reposFile()
 	if err != nil {

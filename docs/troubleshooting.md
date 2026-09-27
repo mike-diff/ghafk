@@ -12,7 +12,8 @@ log, use:
 | Cause | Fix |
 |---|---|
 | The timer does not run. | Run `ghafk start`. Then look for the next run in `ghafk status`. |
-| The repository is not registered. | Run `ghafk init` in the repository. |
+| The repository is not registered. | Run `ghafk init` in the repository. Commit and push `.ghafk/WORKFLOW.md`. |
+| `ghafk status` does not show a repository that you pushed. | The token of the engine's `gh` login does not include the repository, a `skip` line names it, or an organization owns it. See [repositories](configuration.md#repositories). |
 | `ghafk status` shows `not ready` for the repository. | Read the reason. Usually `.ghafk/WORKFLOW.md` is missing or has no worker, and no machine default is set. |
 | The issue has no `agent` label. | Add the label, or comment `/start`. |
 | Somebody is assigned to the issue. | ghafk ignores assigned issues. Remove the assignee. |

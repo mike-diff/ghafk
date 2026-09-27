@@ -17,7 +17,8 @@ comments, labels and reviews show as `<app>[bot]`.
    | Metadata | Read-only (the default) |
 
 4. Generate a private key.
-5. Install the app on the repositories that you register.
+5. Install the app on the repositories that ghafk works. "All repositories"
+   also includes each repository that you add later.
 6. Save the App ID in `~/.ghafk/app`.
 7. Save the key at `~/.ghafk/app.pem`. Only you must be able to read it
    (mode `0600` or `0400`).

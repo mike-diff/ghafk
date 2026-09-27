@@ -6,6 +6,7 @@ To limit access to your personal files, [run ghafk as a separate Linux
 user](separate-user.md).
 
 - [Commands](#commands)
+- [Repositories](#repositories)
 - [Machine settings](#machine-settings)
 - [WORKFLOW.md](#workflowmd)
 - [Labels](#labels)
@@ -17,7 +18,7 @@ user](separate-user.md).
 | Command | What it does |
 |---|---|
 | `ghafk init [path]` | Registers a repository. Writes `.ghafk/WORKFLOW.md` if the file does not exist. Creates the `agent` label and one `harness:<name>` label for each installed harness. |
-| `ghafk remove [path]` | Unregisters a repository. Keeps its files, labels and pull requests. Lists the work that is still in progress. |
+| `ghafk remove [path]` | Unregisters a repository. Keeps its files, labels and pull requests. Lists the work that is still in progress. It cannot remove a repository that ghafk found on GitHub. See [repositories](#repositories). |
 | `ghafk start` | Installs and starts the timer, with the `interval` from the [machine settings](#machine-settings). On Linux, it writes systemd user units. On macOS, it writes a launchd agent. |
 | `ghafk stop` | Stops the timer. A tick that is running finishes first. On macOS, the command waits for that tick. |
 | `ghafk status` | Shows the timer, the recent log, the expiry date of the GitHub token, the GitHub account that ghafk uses, and the state of each repository. |
@@ -35,6 +36,34 @@ user](separate-user.md).
 `Cargo.toml` or `pyproject.toml`. If it cannot find one of these files, it
 shows a warning. Then you must write `checks` yourself.
 
+## Repositories
+
+On each tick, ghafk works two sets of repositories:
+
+1. The paths in `~/.ghafk/repos`. `ghafk init` adds a path.
+2. Each repository that the `gh` login owns, where `.ghafk/WORKFLOW.md` is
+   on the default branch. ghafk finds these on GitHub. It clones a new one
+   into `~/.ghafk/clones/<owner>/<name>`. It ignores forks and archived
+   repositories.
+
+The second set lets ghafk run as a [separate user](separate-user.md) that
+cannot read your clones. Run `ghafk init` in your own clone, then commit
+and push the workflow file. The engine finds the repository on its next
+tick. It needs access to the repository:
+
+- The token of its `gh` login must include the repository. A fine-grained
+  token with "All repositories" includes each new repository. It also
+  gives the agents write access to every repository that you own.
+- The [GitHub App](github-app.md) must be installed on the repository. If
+  it is not, ghafk acts as the `gh` login on that repository.
+
+ghafk does not find repositories of organizations. Register them with
+`ghafk init`.
+
+To stop work on a repository that ghafk found, delete `.ghafk/WORKFLOW.md`
+from its default branch. To keep the file and stop the work on this
+machine, add a `skip` line to the [machine settings](#machine-settings).
+
 ## Machine settings
 
 The file `~/.ghafk/config` holds the settings for all repositories on this
@@ -51,6 +80,7 @@ interval: 5
 | `default` | none | The harness and model for repositories that do not set `worker`. `ghafk harness default` writes this line. |
 | `progress` | `step status duration tokens harness` | The columns of the progress table on each card, in order. Available columns: `step`, `status`, `started`, `ended`, `duration`, `tokens`, `harness`. `step` is necessary. To keep your harness and model private, remove `harness`. |
 | `interval` | `2` | The number of minutes between ticks. The value must divide 60, for example 1, 2, 5, 10, 15, 30 or 60. |
+| `skip` | none | A repository, as `owner/name`, that ghafk must not find on GitHub. Write one line for each repository. It does not affect a path in `~/.ghafk/repos`. |
 
 > [!IMPORTANT]
 > After you change `interval`, run `ghafk start` again. A change to
@@ -138,6 +168,7 @@ contain `A-Z a-z 0-9 . _ : / @ -`.
 | Path | Contents |
 |---|---|
 | `~/.ghafk/repos` | The registered repository paths, one on each line. `#` starts a comment. |
+| `~/.ghafk/clones/` | The clones of the repositories that ghafk found on GitHub. |
 | `~/.ghafk/config` | The [machine settings](#machine-settings). |
 | `~/.ghafk/harnesses` | Your harness profiles. |
 | `~/.ghafk/prompts/` | Your replacements for the built-in [prompts](prompts.md). |

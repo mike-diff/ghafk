@@ -7,6 +7,10 @@ register a repository.
 > Register only repositories where you trust everyone who can label
 > issues.
 
+ghafk also works each repository that you own where `.ghafk/WORKFLOW.md`
+is on the default branch. A person with write access can add that file.
+See [repositories](configuration.md#repositories).
+
 ## Agents run as you
 
 The worker, the groomer, the judge and the reconciler run with your user

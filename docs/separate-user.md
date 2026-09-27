@@ -61,10 +61,14 @@ Do not change permissions recursively.
 ## 3. Configure a restricted GitHub login
 
 1. Create a fine-grained personal access token in your personal GitHub account.
-2. Select only the repositories that ghafk must operate on.
+2. Select the repositories that ghafk must operate on, or "All repositories".
 3. Set Contents, Issues and Pull requests to Read and write.
 4. Keep Metadata at Read-only.
 5. Set a suitable expiration date.
+
+With selected repositories, you must add each new repository to the token.
+With "All repositories", you do not change the token for a new repository.
+But the agents can then write to every repository that you own.
 
 Use the account that must appear as the author and merger of pull requests.
 The GitHub App does not replace this login.
@@ -103,7 +107,7 @@ After the token expires, each tick fails until you replace it.
 3. Run `ghafk status` and make sure that it shows the new expiry date.
 4. Delete the old token on GitHub.
 
-When you register a new repository, add it to the token also.
+With selected repositories, add each new repository to the token.
 
 ## 4. Install the programs and repositories
 
@@ -143,9 +147,15 @@ The [file reference](configuration.md#files) identifies the files below.
 6. Set both file modes to `0600`.
 7. Copy the `default:` and `interval:` settings from the original `config` file.
 8. Set the `progress:` line as shown below.
-9. Write one new clone location per line in the new `repos` file.
-10. Set the owner of both configuration files to the dedicated account.
-11. Set both file modes to `0600`.
+9. Add a `skip:` line for each repository that has `.ghafk/WORKFLOW.md` but
+   that this account must not work.
+10. Set the owner of the `config` file to the dedicated account.
+11. Set its mode to `0600`.
+
+Do not write a `repos` file.
+The engine finds each repository that you own with `.ghafk/WORKFLOW.md` on
+its default branch.
+It clones the repository into its own home directory.
 
 ```text
 progress: step status duration tokens
@@ -179,7 +189,7 @@ Run these checks as the dedicated account:
 10. Check that `gh repo view` fails for a known private repository outside the selection.
 11. Run `ghafk harness test` with the harness and model from the default setting.
 12. Confirm that every harness check passes.
-13. Check that `ghafk status` reports every registered repository as ready.
+13. Check that `ghafk status` reports every repository as ready.
 14. Check that the engine account is your GitHub App's bot account.
 
 Use an account with access to confirm that the negative-test repository exists
@@ -227,7 +237,7 @@ Set its runtime directory with the command above.
 Run `ghafk start`.
 Run `ghafk status`.
 Confirm that its timer is active.
-Confirm that each registered repository is ready.
+Confirm that each repository is ready.
 Confirm that the engine account is the expected bot.
 
 The start command records the current `PATH` in the user service.
@@ -249,3 +259,16 @@ A manual merge does not prove that the engine works.
 If you must return to the original account, stop the dedicated timer first.
 Wait until its service is inactive.
 Start the original timer only after those checks pass.
+
+## 9. Add a repository
+
+Do these steps as your personal account.
+You do not need the dedicated account.
+
+1. Make sure that the token includes the repository.
+2. Make sure that the GitHub App is installed on the repository.
+3. Run `ghafk init` in your own clone.
+4. Commit `.ghafk/WORKFLOW.md` and push it to the default branch.
+
+The engine finds the repository on its next tick and clones it.
+Run `ghafk status` as the dedicated account to see the repository.
