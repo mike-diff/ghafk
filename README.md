@@ -158,7 +158,10 @@ label, harness profile and file. To show ghafk as a bot on GitHub,
 
 ## Security
 
-- Agents run as you, with your credentials and network access.
+- Agents run as you, with your credentials and network access. To keep
+  them away from your keys and other repositories, [run ghafk as its own
+  Linux user](docs/separate-user.md).
+- ghafk's own git commands ignore git files that an agent changes.
 - Only people with write access can send commands or add prompt text.
 - ghafk works only the pull requests that it opened.
 - A change to `.github/` or `.ghafk/` always waits for you.

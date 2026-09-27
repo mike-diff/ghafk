@@ -55,4 +55,6 @@ GitHub refuses a merge that breaks a branch protection rule.
 | The push fails during a tick. | The timer has no SSH agent. Run `gh auth setup-git` and use HTTPS. |
 | `config: ...` | A value in `~/.ghafk/config` is not correct. Read the message and correct the line. See [machine settings](configuration.md#machine-settings). |
 | The log shows that ghafk cannot get an app token. | ghafk uses your login instead. Look at the App ID, the key and the installation. See [Run as a GitHub App](github-app.md). |
+| Each tick fails with `Bad credentials` or `401`. | The GitHub token expired. `ghafk status` shows the expiry date. Replace the token. See [Replace the token before it expires](separate-user.md#replace-the-token-before-it-expires). |
+| The log shows a warning that the GitHub token expires soon. | Replace the token before the date in the warning. |
 | `ghafk harness test` fails. | Log in to the agent CLI, and look at its model name. Then run the test again. |
