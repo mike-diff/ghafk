@@ -9,7 +9,7 @@ import (
 )
 
 func reconcile(home, repo, base, login string, wf workflow, def, before, after string, landedIssue int) error {
-	out, err := run(repo, "git", "diff", "--name-only", before, after)
+	out, err := run(repo, "git", "diff", "--no-renames", "--name-only", before, after)
 	if err != nil {
 		return err
 	}
