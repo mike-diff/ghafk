@@ -33,11 +33,12 @@ var ValidModel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@-]*$`)
 // Builtins returns the profiles ghafk ships with.
 func Builtins() map[string]Profile {
 	return map[string]Profile{
-		"pi":     {Parser: "pi-json", Command: "pi -p --no-session --mode json --model {model}"},
-		"omp":    {Parser: "pi-json", Command: "omp -p --mode json --model {model}"},
-		"claude": {Parser: "claude-json", Command: "claude -p --output-format json --model {model} --permission-mode acceptEdits --allowedTools Bash"},
-		"codex":  {Parser: "codex-json", Command: "codex exec --json --skip-git-repo-check --sandbox workspace-write --model {model} -"},
-		"sesh":   {Parser: "text", Command: `sesh -yes -model {model} -p "$(cat)"`},
+		"pi":       {Parser: "pi-json", Command: "pi -p --no-session --mode json --model {model}"},
+		"omp":      {Parser: "pi-json", Command: "omp -p --mode json --model {model}"},
+		"claude":   {Parser: "claude-json", Command: "claude -p --output-format json --model {model} --permission-mode acceptEdits --allowedTools Bash"},
+		"codex":    {Parser: "codex-json", Command: "codex exec --json --skip-git-repo-check --sandbox workspace-write --model {model} -"},
+		"sesh":     {Parser: "text", Command: `sesh -yes -model {model} -p "$(cat)"`},
+		"opencode": {Parser: "opencode-json", Command: "opencode run --format json -m {model}"},
 	}
 }
 
