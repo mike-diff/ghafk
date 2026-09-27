@@ -128,20 +128,12 @@ func engineSetup() error {
 	if err != nil {
 		fmt.Printf("ghafk: warning: could not list harnesses inside the engine sandbox: %v\n", err)
 	}
-	reportHarnesses(l, harnessesOnPath(list), cfg)
+	reportHarnesses(l, harnessesOnPath(list))
 	fmt.Printf("ghafk: the engine runs as %s every %d minutes. `ghafk status` shows it.\n", l.user, cfg.interval)
 	if relogin {
 		fmt.Printf("ghafk: log out and in again so that your new membership in the %s group lets `ghafk status` read the engine's files.\n", l.user)
 	}
 	return nil
-}
-
-func reportHarnesses(l engineLayout, found []string, cfg settings) {
-	if len(found) == 0 {
-		fmt.Printf("ghafk: warning: the engine finds no harness. Install one as the engine account (`sudo -iu %s`, then the harness's own install and login), close that shell, and run `ghafk engine setup` again.\n", l.user)
-		return
-	}
-	fmt.Printf("ghafk: harnesses on the engine's PATH: %s\n", strings.Join(found, ", "))
 }
 
 func engineStart() error {
