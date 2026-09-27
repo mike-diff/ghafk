@@ -20,7 +20,7 @@ user](separate-user.md).
 | `ghafk remove [path]` | Unregisters a repository. Keeps its files, labels and pull requests. Lists the work that is still in progress. |
 | `ghafk start` | Installs and starts the timer, with the `interval` from the [machine settings](#machine-settings). On Linux, it writes systemd user units. On macOS, it writes a launchd agent. |
 | `ghafk stop` | Stops the timer. A tick that is running finishes first. On macOS, the command waits for that tick. |
-| `ghafk status` | Shows the timer, the recent log, the GitHub account that ghafk uses, and the state of each repository. |
+| `ghafk status` | Shows the timer, the recent log, the expiry date of the GitHub token, the GitHub account that ghafk uses, and the state of each repository. |
 | `ghafk tick` | Runs one tick now, in the foreground. |
 | `ghafk harness list` | Lists the harness profiles, shows which are installed, and shows the machine default. |
 | `ghafk harness default <harness> <model>` | Sets the machine default worker in `~/.ghafk/config`. |

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mike-diff/ghafk/internal/ghapp"
 	"github.com/mike-diff/ghafk/internal/harness"
@@ -25,9 +26,12 @@ func tick() error {
 		return err
 	}
 	progressColumns = cfg.progress
-	owner, err := ghOwner(home, "api", "user", "--jq", ".login")
+	owner, expires, err := ownerAccount(home)
 	if err != nil {
 		return err
+	}
+	if w := tokenWarning(owner, expires, time.Now()); w != "" {
+		fmt.Println(w)
 	}
 	ownerLogin = owner
 	mint := appMinter()

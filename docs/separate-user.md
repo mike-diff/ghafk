@@ -92,6 +92,19 @@ Do not put the token in a command argument, shell history or chat message.
 GitHub CLI retains a credential after you delete the temporary file.
 The dedicated account can read or use that credential.
 
+### Replace the token before it expires
+
+`ghafk status` shows the expiry date of the token.
+In the last 14 days, each tick writes a warning to the log.
+After the token expires, each tick fails until you replace it.
+
+1. Create a new token with the same repositories and permissions.
+2. Log in again with the steps above.
+3. Run `ghafk status` and make sure that it shows the new expiry date.
+4. Delete the old token on GitHub.
+
+When you register a new repository, add it to the token also.
+
 ## 4. Install the programs and repositories
 
 Run all installation commands as the dedicated account.
