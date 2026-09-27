@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/xml"
 	"strings"
 	"testing"
 	"time"
@@ -74,6 +75,41 @@ func TestTokenURLAsksForTheNeededPermissions(t *testing.T) {
 	for _, want := range []string{"contents=write", "issues=write", "pull_requests=write", "expires_in=366"} {
 		if !strings.Contains(u, want) {
 			t.Errorf("token URL lacks %q: %s", want, u)
+		}
+	}
+}
+
+func TestEnginePlistRunsTheRootOwnedBinaryAsTheHiddenAccountWithoutSecrets(t *testing.T) {
+	plist := enginePlist(darwinEngine, 2)
+	for _, want := range []string{"<string>ghafk.engine</string>", "<string>/usr/local/bin/ghafk</string>", "<key>UserName</key>\n\t<string>_ghafk</string>", "<integer>120</integer>", "<key>Umask</key>\n\t<integer>23</integer>", "/usr/local/var/ghafk/.local/bin:"} {
+		if !strings.Contains(plist, want) {
+			t.Errorf("plist lacks %q:\n%s", want, plist)
+		}
+	}
+	for _, bad := range []string{"GH_TOKEN", "ProcessType"} {
+		if strings.Contains(plist, bad) {
+			t.Errorf("plist contains %s; launchctl print shows plist environment to every user, and Background slows ticks", bad)
+		}
+	}
+	if err := xml.Unmarshal([]byte(plist), new(struct{})); err != nil {
+		t.Fatalf("plist is not well-formed XML: %v", err)
+	}
+}
+
+func TestFreeServiceIDIsFreeAsBothUserAndGroup(t *testing.T) {
+	users := "_www 70\n_taken 499\nme 501"
+	groups := "staff 20\ncom.apple.access_ssh 498\n_ghafkold 497"
+	id, err := freeServiceID(users, groups)
+	if err != nil || id != 496 {
+		t.Fatalf("id = %d, %v; want 496, the highest id below 500 unused by any user or group", id, err)
+	}
+}
+
+func TestEngineTimerCatchesUpAfterDowntime(t *testing.T) {
+	timer := engineTimerUnit(5)
+	for _, want := range []string{"OnCalendar=*:0/5", "Persistent=true", "WantedBy=timers.target"} {
+		if !strings.Contains(timer, want) {
+			t.Errorf("%s.timer lacks %q:\n%s", engineUnitName, want, timer)
 		}
 	}
 }

@@ -341,3 +341,11 @@ func renderEngineStatus(st engineStatus, now time.Time) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+func reportHarnesses(l engineLayout, found []string) {
+	if len(found) == 0 {
+		fmt.Printf("ghafk: warning: the engine finds no harness. Install one as the engine account (`sudo -iu %s`, then the harness's own install and login), close that shell, and run `ghafk engine setup` again.\n", l.user)
+		return
+	}
+	fmt.Printf("ghafk: harnesses on the engine's PATH: %s\n", strings.Join(found, ", "))
+}
