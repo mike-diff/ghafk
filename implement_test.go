@@ -133,3 +133,29 @@ func TestAnEmptyContractParksInsteadOfGroomingAgain(t *testing.T) {
 		t.Fatalf("an empty contract was saved and queued, so the groomer runs again every tick: %v", *calls)
 	}
 }
+
+func TestAWorkflowChangeIsNeverPushed(t *testing.T) {
+	repo := gitClone(t)
+	calls := runIssueWith(t, repo, `mkdir -p .github/workflows && echo "name: x" > .github/workflows/x.yml`)
+	if !called(calls, "issue edit 5 --add-label needs-human --remove-label agent") {
+		t.Fatalf("a worker's workflow change was not handed to the owner: %v", calls)
+	}
+	if remote, _ := run(repo, "git", "ls-remote", "--heads", "origin", "agent/5"); remote != "" {
+		t.Fatal("the workflow change was pushed, so GitHub Actions runs it with the repository's secrets")
+	}
+	body := ""
+	for _, c := range calls {
+		body += c.String()
+	}
+	if !strings.Contains(body, "name: x") {
+		t.Fatal("the park comment does not show the held workflow change")
+	}
+}
+
+func TestAnOrdinaryChangeIsStillPushed(t *testing.T) {
+	repo := gitClone(t)
+	runIssueWith(t, repo, `mkdir -p docs && echo x > docs/github.md`)
+	if remote, _ := run(repo, "git", "ls-remote", "--heads", "origin", "agent/5"); remote == "" {
+		t.Fatal("a change outside .github/ was not pushed")
+	}
+}

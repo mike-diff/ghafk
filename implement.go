@@ -74,6 +74,13 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 		return parkOnError(at, "commit", "The commit failed.", err)
 	}
 
+	if held, err := holdWorkflowsBeforePush(at, work, def); held || err != nil {
+		if err != nil {
+			return parkOnError(at, "push", "ghafk could not list the changed files.", err)
+		}
+		return nil
+	}
+
 	stepf(base, is.Number, "push")
 	if _, err := run(work, "git", "push", "-u", "origin", branch); err != nil {
 		return parkOnError(at, "push", "The push was rejected.", err)

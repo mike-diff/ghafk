@@ -391,3 +391,26 @@ func TestAUnicodeWorkflowNameHoldsTheMerge(t *testing.T) {
 		t.Fatalf("held = %v, %v; git quotes a non-ASCII path, and the quoted workflow merged unattended", held, err)
 	}
 }
+
+func TestARepairThatAddsAWorkflowIsNotPushed(t *testing.T) {
+	calls := fakeGH(t, nil)
+	repo, work, checked := mergeWorktree(t)
+	if err := os.MkdirAll(filepath.Join(work, ".github", "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, ".github", "workflows", "x.yml"), []byte("name: x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", "repair"}} {
+		if _, err := run(work, "git", args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	held, err := holdWorkflowsBeforePush(mergeRun(t, repo, work, checked).at, work, "main")
+	if err != nil || !held || !called(*calls, "issue edit 5 --add-label needs-human") {
+		t.Fatalf("held = %v, %v; a repair that adds a workflow would be pushed", held, err)
+	}
+	if remote, _ := run(repo, "git", "ls-remote", "origin", "agent/5"); !strings.HasPrefix(remote, checked) {
+		t.Fatal("the branch moved on GitHub")
+	}
+}
