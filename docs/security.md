@@ -66,7 +66,7 @@ instructions. ghafk applies these limits:
 - Slash commands count only from people with write access.
 - ghafk works and merges only the pull requests that it opened, from the
   same repository.
-- A change to `.github/` or `.ghafk/` always waits for you.
+- A change to `.github/` or `.ghafk/` always waits for you. ghafk never pushes a change to `.github/`, because GitHub Actions runs a pushed workflow with the secrets of the repository. It puts the change in the park comment instead.
 - An issue or pull request with 100 or more comments parks. GitHub gives
   ghafk only the first 100 comments, so ghafk cannot see newer commands.
 

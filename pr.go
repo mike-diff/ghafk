@@ -310,6 +310,12 @@ func (r *prRun) repair() (bool, error) {
 	if err != nil {
 		return true, parkOnError(r.at, "commit", "The repair commit failed.", err)
 	}
+	if held, err := holdWorkflowsBeforePush(r.at, r.work, r.def); held || err != nil {
+		if err != nil {
+			return true, parkOnError(r.at, "push", "ghafk could not list the changed files.", err)
+		}
+		return true, nil
+	}
 	if _, err := run(r.work, "git", "push", r.lease, "origin", r.branch); err != nil {
 		return true, parkOnError(r.at, "push", "The repair push was rejected.", err)
 	}
@@ -383,6 +389,36 @@ func protectedPaths(files []string) []string {
 	}
 	return held
 }
+
+func holdWorkflowsBeforePush(at parkPlace, work, def string) (bool, error) {
+	out, err := run(work, "git", "diff", "--no-renames", "--name-only", "-z", "origin/"+def+"...HEAD")
+	if err != nil {
+		return false, err
+	}
+	var held []string
+	for _, f := range strings.Split(out, "\x00") {
+		if strings.HasPrefix(f, ".github/") {
+			held = append(held, f)
+		}
+	}
+	if len(held) == 0 {
+		return false, nil
+	}
+	patch, err := run(work, "git", "diff", "--no-renames", "origin/"+def+"...HEAD", "--", ".github/")
+	if err != nil {
+		return false, err
+	}
+	if len(patch) > maxHeldPatch {
+		patch = patch[:maxHeldPatch] + "\n..."
+	}
+	spec := commentSpec{kind: "park", role: "push", number: at.issue,
+		sentence: "The change touches `.github/`, which GitHub Actions runs with this repository's secrets as soon as a branch is pushed. ghafk did not push it.",
+		body:     fenced(strings.Join(held, "\n")) + "\n\n" + fenced(patch) + "\n\nApply the change yourself if you want it, or `/close` the issue.",
+		footer:   retryFooter()}
+	return true, park(at, "workflow change not pushed", spec)
+}
+
+const maxHeldPatch = 20000
 
 func (r *prRun) holdProtected() (bool, error) {
 	out, err := run(r.work, "git", "diff", "--no-renames", "--name-only", "-z", "origin/"+r.def+"...HEAD")

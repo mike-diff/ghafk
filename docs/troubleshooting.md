@@ -37,6 +37,7 @@ happened and which command continues the work.
 | The judge rejected the diff twice. | Read the rejection. Make the issue clearer. Then reply `/retry`. |
 | The worker made no changes. | The issue is probably not clear, or the change exists already. Correct the issue. Then reply `/retry`. |
 | The change touches paths ghafk never merges on its own. | The pull request changes `.github/` or `.ghafk/`. Review it and merge it yourself. |
+| The change touches `.github/`, which GitHub Actions runs with this repository's secrets as soon as a branch is pushed. | The agent changed a workflow. ghafk did not push it. The comment shows the change; apply it yourself, or `/close` the issue. |
 | GitHub refused the merge. | Read [Merge is refused](#merge-is-refused). |
 | The reconciler says the landed code already satisfies this contract. | Close the issue, or reply `/retry` if the work is not complete. |
 
