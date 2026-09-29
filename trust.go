@@ -40,6 +40,10 @@ func issueDigest(is issue) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func editedSinceGroom(is issue, st cardState) bool {
+	return st.Groomed != "" && st.Groomed != issueDigest(is)
+}
+
 func needsApproval(is issue, st cardState) bool {
 	return !canWrite(is.Author.Login) && st.Approved != issueDigest(is)
 }

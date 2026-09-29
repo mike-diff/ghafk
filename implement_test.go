@@ -238,3 +238,30 @@ func TestAContractWithASecretIsStoredRedacted(t *testing.T) {
 		t.Fatalf("no card with the contract was written: %v", *calls)
 	}
 }
+
+func TestGroomingRecordsTheIssueTextItWasGiven(t *testing.T) {
+	needSandbox(t)
+	repo := gitClone(t)
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "repo view") {
+			return "main", nil
+		}
+		return "", nil
+	})
+	is := issue{Number: 5, Title: "t", Body: "the text"}
+	wf := workflow{label: "agent", groomer: harness.Role{Command: `printf 'contract:\n## Change\ndo it\n'`}, timeout: time.Minute}
+	if err := groomIssue(t.TempDir(), repo, "demo", "owner", wf, is); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range *calls {
+		for _, arg := range c.args {
+			if st, ok := parseCard(strings.TrimPrefix(arg, "body=")); ok && st.Contract != "" {
+				if st.Groomed != issueDigest(is) {
+					t.Fatalf("the card must record the issue text the contract came from, got %q", st.Groomed)
+				}
+				return
+			}
+		}
+	}
+	t.Fatalf("no card with the contract was written: %v", *calls)
+}

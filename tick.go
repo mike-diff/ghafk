@@ -146,10 +146,11 @@ func workRepo(home, repo, login string, henv harness.Env) error {
 	if tooManyComments(is.Comments) {
 		return parkTooManyComments(repo, base, login, wf.label, is)
 	}
-	if needsApproval(is, openCard(repo, is, login).st) {
+	st := openCard(repo, is, login).st
+	if needsApproval(is, st) {
 		return parkForApproval(repo, base, login, wf.label, is)
 	}
-	if contractText(is.Comments, login) != "" && !staleAfterContract(is.Comments, login) {
+	if contractText(is.Comments, login) != "" && !staleAfterContract(is.Comments, login) && !editedSinceGroom(is, st) {
 		if err := runIssue(home, repo, base, login, wf, contractText(is.Comments, login), is); err != nil {
 			return fmt.Errorf("#%d: %w", is.Number, err)
 		}

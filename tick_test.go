@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mike-diff/ghafk/internal/harness"
 )
@@ -74,5 +76,68 @@ func TestAFloodedPullRequestParks(t *testing.T) {
 	}
 	if !called(*calls, "issue edit 5 --add-label needs-human --remove-label agent") {
 		t.Fatalf("a PR with more comments than gh returns was worked blind: %v", *calls)
+	}
+}
+
+func tickWithGroomedCard(t *testing.T, groomedBody, currentBody string) []ghCall {
+	t.Helper()
+	needSandbox(t)
+	repo := gitClone(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".ghafk"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	flow := "---\nlabel: agent\nchecks: true\ngroomer: echo groomer-ran; false\nworker: echo worker-ran; false\njudge: false\n---\n"
+	if err := os.WriteFile(filepath.Join(repo, ".ghafk", "WORKFLOW.md"), []byte(flow), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	groomed := issue{Title: "t", Body: groomedBody}
+	st := cardState{Number: 5, Title: "t", Phase: "queued", Contract: "## Change\nthe old contract", Groomed: issueDigest(groomed)}
+	card, _ := json.Marshal(renderCardBody(st, time.UTC, false))
+	issues := `[{"number":5,"author":{"login":"owner"},"title":"t","body":` + strconv.Quote(currentBody) + `,"labels":[{"name":"agent"}],"comments":[{"body":` + string(card) + `,"author":{"login":"owner"},"authorAssociation":"OWNER"}]}]`
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		switch {
+		case strings.HasPrefix(cmd, "issue list"):
+			return issues, nil
+		case strings.HasPrefix(cmd, "pr list"):
+			return "[]", nil
+		case strings.HasPrefix(cmd, "repo view"):
+			return "main", nil
+		case strings.Contains(cmd, "/permission"):
+			return "admin", nil
+		}
+		return "", nil
+	})
+	_ = workRepo(t.TempDir(), repo, "owner", harness.Env{})
+	return *calls
+}
+
+func ranRole(calls []ghCall, role string) bool {
+	for _, c := range calls {
+		for _, arg := range c.args {
+			if strings.Contains(arg, "**ghafk** · "+role+" ·") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestAnIssueEditedAfterGroomingIsGroomedAgain(t *testing.T) {
+	calls := tickWithGroomedCard(t, "the old text", "the new text")
+	if !ranRole(calls, "groomer") || ranRole(calls, "worker") {
+		t.Fatalf("an issue whose text changed after grooming must be groomed again, not built from the old contract: %v", calls)
+	}
+}
+
+func TestAnUnchangedIssueKeepsItsContract(t *testing.T) {
+	calls := tickWithGroomedCard(t, "the same text", "the same text")
+	if !ranRole(calls, "worker") || ranRole(calls, "groomer") {
+		t.Fatalf("an issue whose text did not change must go on to the worker with its contract: %v", calls)
+	}
+}
+
+func TestACardFromBeforeTheDigestKeepsItsContract(t *testing.T) {
+	if editedSinceGroom(issue{Title: "t", Body: "any text"}, cardState{Contract: "c"}) {
+		t.Fatal("a card written before ghafk recorded the groomed text must keep its contract, not re-groom every issue in flight")
 	}
 }

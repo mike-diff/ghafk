@@ -49,6 +49,7 @@ type cardState struct {
 	Repairs  int                 `json:"repairs,omitempty"`
 	Contract string              `json:"contract,omitempty"`
 	Approved string              `json:"approved,omitempty"`
+	Groomed  string              `json:"groomed,omitempty"`
 	Items    map[int]cardItem    `json:"items,omitempty"`
 	History  []cardEvent         `json:"history,omitempty"`
 }

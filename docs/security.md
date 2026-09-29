@@ -168,6 +168,9 @@ instructions. ghafk applies these limits:
 - An issue from a person without write access waits for `/start` from a
   maintainer. If its title or description changes after `/start`, the
   issue parks. It then needs a new `/start`.
+- When the title or description of any issue changes after ghafk wrote
+  its contract, ghafk writes a new contract from the new text before it
+  starts the work, so a stale contract is never built.
 - Slash commands count only from people with write access.
 - ghafk works and merges only the pull requests that it opened, from the
   same repository.
