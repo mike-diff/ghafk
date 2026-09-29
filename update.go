@@ -34,7 +34,11 @@ func installedBinary() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	return binaryFromGoEnv(string(out))
+}
+
+func binaryFromGoEnv(out string) (string, error) {
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if len(lines) > 0 && strings.TrimSpace(lines[0]) != "" {
 		return filepath.Join(strings.TrimSpace(lines[0]), "ghafk"), nil
 	}

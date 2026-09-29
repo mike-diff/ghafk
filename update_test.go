@@ -27,3 +27,14 @@ func TestUpdateInstallsMainPastTheModuleProxy(t *testing.T) {
 		t.Fatalf("installed binary = %q, %v", bin, err)
 	}
 }
+
+func TestUpdateNamesTheBinaryInGopathBinWhenGobinIsUnset(t *testing.T) {
+	got, err := binaryFromGoEnv("\n/home/u/go\n")
+	if err != nil || got != filepath.Join("/home/u/go", "bin", "ghafk") {
+		t.Fatalf("with GOBIN unset, go install writes GOPATH/bin, got %q, %v", got, err)
+	}
+	got, err = binaryFromGoEnv("/opt/bin\n/home/u/go\n")
+	if err != nil || got != filepath.Join("/opt/bin", "ghafk") {
+		t.Fatalf("with GOBIN set, go install writes GOBIN, got %q, %v", got, err)
+	}
+}
