@@ -23,7 +23,10 @@ sandbox that ends with the run:
 - The sandbox sees the worktree read-write, the repository's `.git`
   read-only, a fresh home directory that is deleted after the run, a
   per-repository cache directory, the harness's login file, and the
-  program directories the run needs. System directories are read-only.
+  program directories the run needs. When a program is a pyenv or rbenv
+  shim, the version manager's folder (for example `~/.pyenv`) is
+  readable too, because the shim runs the manager. System directories
+  are read-only.
   The Go toolchains in your module download cache
   (`golang.org/toolchain`) are readable too, so a repository that needs
   a newer Go builds without a download; other cached modules stay
