@@ -59,6 +59,7 @@ type sandboxSpec struct {
 	programDirs   []string
 	extraBinds    []string
 	localPorts    []int
+	goToolchains  string
 	ghafkBin      string
 	path          string
 	profile       string
@@ -499,6 +500,7 @@ func buildSandbox(o sandboxOpts) (sandboxSpec, error) {
 	spec.passEnv = cfg.env
 	spec.machineEgress = cfg.egress
 	spec.localPorts = cfg.local
+	spec.goToolchains = goToolchainCache(home)
 	missing := []string{}
 	for _, w := range words {
 		if w == "" {
@@ -1095,6 +1097,30 @@ func sandboxEnv(spec sandboxSpec, home, proxyURL string) []string {
 	return env
 }
 
+func goToolchainCache(home string) string {
+	modCache := os.Getenv("GOMODCACHE")
+	if modCache == "" {
+		gopath := filepath.Join(home, "go")
+		if list := filepath.SplitList(os.Getenv("GOPATH")); len(list) > 0 && list[0] != "" {
+			gopath = list[0]
+		}
+		modCache = filepath.Join(gopath, "pkg", "mod")
+	}
+	dir := filepath.Join(modCache, "cache", "download", "golang.org", "toolchain")
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return ""
+	}
+	return dir
+}
+
+func sandboxGoProxy(toolchains string) string {
+	if toolchains == "" {
+		return "https://proxy.golang.org,direct"
+	}
+	root := filepath.Dir(filepath.Dir(toolchains))
+	return "file://" + filepath.ToSlash(root) + ",https://proxy.golang.org,direct"
+}
+
 func sandboxFixedEnv(spec sandboxSpec, home, proxyURL string) []string {
 	tmp := filepath.Join(home, "tmp")
 	env := []string{
@@ -1116,6 +1142,7 @@ func sandboxFixedEnv(spec sandboxSpec, home, proxyURL string) []string {
 		"npm_config_store_dir=" + filepath.Join(spec.cacheDir, "pnpm"),
 		"pnpm_config_store_dir=" + filepath.Join(spec.cacheDir, "pnpm"),
 		"pnpm_config_cache_dir=" + filepath.Join(spec.cacheDir, "pnpm-cache"),
+		"GOPROXY=" + sandboxGoProxy(spec.goToolchains),
 		"GOPATH=" + filepath.Join(home, "go"),
 		"CARGO_HOME=" + filepath.Join(home, ".cargo"),
 		"PIP_CACHE_DIR=" + filepath.Join(home, ".cache", "pip"),
@@ -1367,6 +1394,12 @@ func seatbeltPaths(spec sandboxSpec) seatbeltSpec {
 	s.Execs = append(s.Execs, devExecs...)
 	s.Reads = append(s.Reads, devReads...)
 	s.LocalPorts = spec.localPorts
+	if spec.goToolchains != "" {
+		s.DataReads = append(s.DataReads, evalPath(spec.goToolchains))
+		if r := evalPath(spec.goToolchains); r != spec.goToolchains {
+			s.Links = append(s.Links, spec.goToolchains)
+		}
+	}
 	if spec.repoGit != "" {
 		s.DataReads = append(s.DataReads, evalPath(spec.repoGit))
 		if r := evalPath(spec.repoGit); r != spec.repoGit {

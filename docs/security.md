@@ -24,6 +24,10 @@ sandbox that ends with the run:
   read-only, a fresh home directory that is deleted after the run, a
   per-repository cache directory, the harness's login file, and the
   program directories the run needs. System directories are read-only.
+  The Go toolchains in your module download cache
+  (`golang.org/toolchain`) are readable too, so a repository that needs
+  a newer Go builds without a download; other cached modules stay
+  hidden.
   The run can read everything in the repository's `.git`: local
   branches, stashes and `.git/config`. Do not keep a token in a remote
   URL.
