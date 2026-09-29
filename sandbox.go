@@ -687,7 +687,30 @@ func programBindShallow(bin string) []string {
 	if strings.Contains(filepath.ToSlash(resolved), toolchainMarker) {
 		dirs = append(dirs, filepath.Dir(filepath.Dir(resolved)))
 	}
+	if root := shimManagerRoot(resolved); root != "" {
+		dirs = append(dirs, root)
+	}
 	return dedup(dirs)
+}
+
+var shimRootLine = regexp.MustCompile(`(?m)^export [A-Z]+_ROOT="([^"]+)"$`)
+
+func shimManagerRoot(path string) string {
+	shims := filepath.Dir(path)
+	if filepath.Base(shims) != "shims" {
+		return ""
+	}
+	data, err := readSmallRegularFile(path, 64<<10)
+	if err != nil {
+		return ""
+	}
+	root := filepath.Dir(shims)
+	for _, m := range shimRootLine.FindAllSubmatch(data, -1) {
+		if evalPath(string(m[1])) == evalPath(root) {
+			return root
+		}
+	}
+	return ""
 }
 
 func nodeInstallDirs(node string) []string {

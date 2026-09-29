@@ -1431,3 +1431,20 @@ func TestRedactionIsLogged(t *testing.T) {
 		t.Fatalf("a redaction must show in the tick log, got %q", logged)
 	}
 }
+
+func TestAVersionManagerShimBindsItsRoot(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "shims"), 0o755)
+	shim := filepath.Join(root, "shims", "tool")
+	os.WriteFile(shim, []byte("#!/usr/bin/env bash\nexport PYENV_ROOT=\""+root+"\"\nexec \""+root+"/libexec/pyenv\" exec tool \"$@\"\n"), 0o755)
+	if !slices.Contains(programBindShallow(shim), root) {
+		t.Fatalf("the shim's version manager root is not bound: %v", programBindShallow(shim))
+	}
+	other := t.TempDir()
+	os.MkdirAll(filepath.Join(other, "shims"), 0o755)
+	liar := filepath.Join(other, "shims", "tool")
+	os.WriteFile(liar, []byte("#!/usr/bin/env bash\nexport PYENV_ROOT=\""+root+"\"\n"), 0o755)
+	if dirs := programBindShallow(liar); slices.Contains(dirs, root) || slices.Contains(dirs, other) {
+		t.Fatalf("a shim naming another root must bind neither: %v", dirs)
+	}
+}
