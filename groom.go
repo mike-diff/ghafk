@@ -51,6 +51,7 @@ func groomIssue(home, repo, base, login string, wf workflow, is issue) error {
 	case strings.HasPrefix(answer, "contract:") && strings.TrimSpace(strings.TrimPrefix(answer, "contract:")) != "":
 		stepf(base, is.Number, "contract")
 		c.st.Contract = strings.TrimSpace(strings.TrimPrefix(answer, "contract:"))
+		c.st.Groomed = issueDigest(is)
 		c.finish("done", tokens)
 		c.queue()
 		if c.err != nil {
