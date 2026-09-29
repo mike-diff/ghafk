@@ -2,12 +2,16 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 var worktreeGitDirs = map[string]string{}
+
+var worktreePointers = map[string]string{}
 
 var gitHardening = []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=", "-c", "protocol.ext.allow=never"}
 
@@ -20,6 +24,21 @@ func addWorktree(repo, work string, rest ...string) error {
 		return err
 	}
 	worktreeGitDirs[work] = gitDir
+	if pointer, err := os.ReadFile(filepath.Join(work, ".git")); err == nil {
+		worktreePointers[work] = strings.TrimSpace(string(pointer))
+	}
+	return nil
+}
+
+func worktreeIntact(work string) error {
+	gitDir, tracked := worktreeGitDirs[work]
+	if !tracked || work == "" {
+		return nil
+	}
+	pointer, err := readSmallRegularFile(filepath.Join(work, ".git"), 4096)
+	if err != nil || strings.TrimSpace(string(pointer)) != worktreePointers[work] || strings.TrimSpace(string(pointer)) != "gitdir: "+gitDir {
+		return fmt.Errorf("the agent changed the worktree's git pointer; ghafk will not touch %s again this tick", work)
+	}
 	return nil
 }
 
@@ -67,4 +86,23 @@ func hardenGit(dir string, args []string) ([]string, error) {
 		pre = append(pre, "--git-dir="+gitDir, "--work-tree="+dir)
 	}
 	return append(pre, args...), nil
+}
+
+func readSmallRegularFile(path string, limit int64) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > limit {
+		return nil, fmt.Errorf("%s is not a small regular file", path)
+	}
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if fdInfo, err := f.Stat(); err != nil || !os.SameFile(info, fdInfo) {
+		return nil, fmt.Errorf("%s changed while ghafk read it", path)
+	}
+	return io.ReadAll(io.LimitReader(f, limit))
 }

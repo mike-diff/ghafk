@@ -47,17 +47,17 @@ func parseItems(answer string) map[int]cardItem {
 	return items
 }
 
-func runJudge(base string, n int, work string, jr harness.Role, body, contract, def string, timeout time.Duration) (string, int, error) {
+func runJudge(base string, n int, work string, jr harness.Role, body, contract, def string, timeout time.Duration, egress []string, repo, home string) (string, int, error) {
 	diff, err := run(work, "git", "diff", "origin/"+def+"...HEAD")
 	if err != nil {
 		return "", 0, err
 	}
 	prompt := joinParts(rolePrompt("judge"), body, contract, "# Diff\n"+capDiff(diff))
 	var out bytes.Buffer
-	if err := runShell("judge", work, jr.Command, prompt, timeout, &out, os.Stderr); err != nil {
+	if err := runSandboxed(sandboxOpts{name: "judge", dir: work, command: jr.Command, stdin: prompt, timeout: timeout, role: &jr, egress: egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		return "", 0, err
 	}
-	answer, tokens := reportRoleUsage(base, n, jr, out.String())
+	answer, tokens := reportRoleUsage(base, n, jr, redactSecrets(out.String()))
 	if _, err := run(work, "git", "checkout", "--", "."); err != nil {
 		return "", 0, err
 	}

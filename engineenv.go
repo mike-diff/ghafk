@@ -43,6 +43,7 @@ func loadEngineEnv() error {
 		if !ok || !envKey.MatchString(key) {
 			return fmt.Errorf("%s line %d: want KEY=value", path, n+1)
 		}
+		registerSecret(value)
 		if key == "GH_TOKEN" {
 			ownerToken = value
 			continue

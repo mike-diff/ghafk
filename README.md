@@ -57,6 +57,8 @@ flowchart TD
 
 - [ ] Linux with a systemd user session, or macOS
 - [ ] Go 1.26 or newer, and `git` with a commit identity
+- [ ] On Linux, the `bubblewrap` package. On stock Ubuntu 24.04, ghafk
+      prints the one-time `sudo` step that enables it.
 - [ ] [`gh`](https://cli.github.com), logged in with `gh auth login`
 - [ ] A coding agent CLI that ghafk supports. See [harness profiles](docs/configuration.md#harness-profiles).
 
@@ -85,32 +87,31 @@ flowchart TD
    ```
 
    ghafk also works each repository that you own where
-   `.ghafk/WORKFLOW.md` is on the default branch. If the engine runs as its
-   own account, run `ghafk init` in your own clone and push. The engine
-   finds the repository on its next tick. See
+   `.ghafk/WORKFLOW.md` is on the default branch. It finds a repository
+   that you push on its next tick. See
    [repositories](docs/configuration.md#repositories).
 
-4. Start the engine. We recommend its own account:
+4. Start the timer. ghafk runs as you, and each agent run and each checks
+   run goes into an OS sandbox: bubblewrap on Linux, `sandbox-exec` on
+   macOS. The sandbox hides the rest of your home and reaches the network
+   only through an allowlisted proxy. See [security](docs/security.md).
+   A tick stops if the sandbox cannot start. A run parks with the fix if
+   the proxy or a program is missing. On Linux, keep the timer after you log
+   out with `loginctl enable-linger "$USER"`.
 
    ```sh
-   ghafk engine setup
+   ghafk start
    ```
 
-   The command asks for your sudo password once. It creates a system
-   account, installs a hardened service and asks for a GitHub token. Then
-   install your harness as that account. The command tells you how. To run
-   the engine as you instead, use `ghafk start`. See
-   [the engine account](docs/separate-user.md).
+   > [!TIP]
+   > Claude Code with a subscription on macOS keeps its login in the
+   > Keychain, which the sandbox blocks. Run `claude setup-token` once and
+   > put `CLAUDE_CODE_OAUTH_TOKEN=<token>` in `~/.ghafk/env` (`chmod 600`).
 
 5. Label an issue `agent`, or comment `/start` on it. To get good results,
    read [how to write an issue](docs/writing-issues.md).
 
-To update ghafk and the engine, run `ghafk update`.
-
-> [!TIP]
-> The timer has no SSH agent. If you push over HTTPS, run `gh auth setup-git`.
-> On Linux, run `loginctl enable-linger "$USER"` to keep the timer on after
-> you log out. On macOS, the timer runs only while you are logged in.
+To update ghafk, run `ghafk update`.
 
 ## What happens next
 
@@ -172,11 +173,17 @@ label, harness profile and file. To show ghafk as a bot on GitHub,
 
 ## Security
 
-- Agents run as the account of the engine. With `ghafk engine setup`, that
-  is a separate system account. On Linux, a hardened service also hides the
-  home directories. With `ghafk start`, agents run as you, with your
-  credentials. See [the engine account](docs/separate-user.md).
-- ghafk's own git commands ignore git files that an agent changes.
+- Every agent run and every checks run goes into a new OS sandbox that
+  ends with the run: bubblewrap on Linux, `sandbox-exec` on macOS. The
+  sandbox sees the worktree, a fresh home, per-repository caches and the
+  harness login only. Your other files, your `gh` login, your SSH keys
+  and `/run/user` stay invisible. See [the sandbox model](docs/security.md).
+- The sandbox has no direct network. A proxy outside the sandbox allows
+  only model APIs, npm, the Go module proxy, PyPI and models.dev. An
+  `egress:` line in `.ghafk/WORKFLOW.md` adds hosts; denied hosts appear
+  in the park comment.
+- ghafk's own git commands ignore git files that an agent changes, and
+  the repository `.git` is read-only inside the sandbox.
 - Only people with write access can send commands or add prompt text.
 - ghafk works only the pull requests that it opened.
 - A change to `.github/` or `.ghafk/` always waits for you.

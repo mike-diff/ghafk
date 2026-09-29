@@ -414,3 +414,42 @@ func TestARepairThatAddsAWorkflowIsNotPushed(t *testing.T) {
 		t.Fatal("the branch moved on GitHub")
 	}
 }
+
+func TestChecksThatCannotStartParkWithTheReason(t *testing.T) {
+	needSandbox(t)
+	calls := fakeGH(t, nil)
+	r, _ := repairRun(t, "true\n")
+	r.wf.checks = "ghafk-no-such-program-zz && true"
+	parked, err := r.check()
+	if err != nil || !parked {
+		t.Fatalf("check = %v, %v; a checks command that cannot start must park at once", parked, err)
+	}
+	found := false
+	for _, c := range *calls {
+		if strings.Contains(c.String(), "could not run in the sandbox") && strings.Contains(c.String(), "not on PATH") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the park comment must say the checks could not run and why: %v", *calls)
+	}
+	if !called(*calls, "issue edit 5 --add-label needs-human") {
+		t.Fatalf("the issue was not handed to the owner: %v", *calls)
+	}
+}
+
+func TestAMergeThatCannotBeScannedParks(t *testing.T) {
+	calls := fakeGH(t, nil)
+	repo, work, checked := mergeWorktree(t)
+	r := mergeRun(t, repo, work, checked)
+	r.def = "no-such-branch"
+	if err := r.merge(); err != nil {
+		t.Fatalf("a scan error must park, not fail the tick: %v", err)
+	}
+	if called(*calls, "pr merge") {
+		t.Fatalf("an unscanned branch was merged: %v", *calls)
+	}
+	if !called(*calls, "issue edit 5 --add-label needs-human") {
+		t.Fatalf("the branch was not handed to the owner: %v", *calls)
+	}
+}

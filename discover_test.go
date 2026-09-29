@@ -31,6 +31,7 @@ func TestDiscoveryLeavesRegisteredAndSkippedRepositoriesAlone(t *testing.T) {
 func TestEngineReposClonesADiscoveredRepositoryOnlyForATick(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	calls := fakeGH(t, func(cmd string) (string, error) {
 		if strings.HasPrefix(cmd, "api graphql") {
 			return "me/app\tfalse\tfalse\ttrue", nil
@@ -58,6 +59,7 @@ func TestEngineReposClonesADiscoveredRepositoryOnlyForATick(t *testing.T) {
 func TestListedRepositoriesAreWorkedEvenWhenDiscoveryFails(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	fakeGH(t, func(cmd string) (string, error) {
 		if strings.HasPrefix(cmd, "api graphql") {
 			return "", errors.New("network down")

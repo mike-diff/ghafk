@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -78,7 +79,7 @@ func workPR(home, repo, base, login string, wf workflow, prs []pr) (bool, error)
 		return true, err
 	}
 	defer worktreeRemove(repo, r.work)
-	if err := r.check(); err != nil {
+	if parked, err := r.check(); parked || err != nil {
 		return true, err
 	}
 	if r.green {
@@ -129,7 +130,7 @@ func (r *prRun) checkout() error {
 	if _, err := run(r.repo, "git", "fetch", "origin"); err != nil {
 		return err
 	}
-	r.work = workDir(r.home, r.repo, r.issueNum)
+	r.work = runWork(r.home, r.repo, r.issueNum)
 	if err := clearStale(r.repo, r.work, r.branch); err != nil {
 		return err
 	}
@@ -153,14 +154,14 @@ func (r *prRun) checkout() error {
 	return nil
 }
 
-func (r *prRun) check() error {
+func (r *prRun) check() (bool, error) {
 	if _, err := run(r.work, "git", "rebase", "origin/"+r.def); err != nil {
 		_, err := run(r.work, "git", "rebase", "--abort")
-		return err
+		return false, err
 	}
 	var err error
 	if r.after, err = run(r.work, "git", "rev-parse", "HEAD"); err != nil {
-		return err
+		return false, err
 	}
 	if checksPassedAt(r.pick, r.after) {
 		r.green = true
@@ -168,13 +169,17 @@ func (r *prRun) check() error {
 		r.card.finish("done", 0)
 	} else {
 		var buf bytes.Buffer
-		r.checkErr = runShell("checks", r.work, r.wf.checks, "", checkTimeout, &buf, &buf)
+		r.checkErr = runSandboxed(sandboxOpts{name: "checks", dir: r.work, command: r.wf.checks, timeout: checkTimeout, egress: r.wf.egress, repo: r.repo, home: r.home}, &buf, &buf)
+		var setup sandboxSetupError
+		if errors.As(r.checkErr, &setup) {
+			return true, parkOnError(r.at, "checks", "The checks could not run in the sandbox.", r.checkErr)
+		}
 		if r.checkErr == nil {
 			r.green = true
 			r.st.Checks, r.st.ChecksSha = "pass", r.after
 			r.card.finish("done", 0)
 		} else {
-			r.checkOut = buf.String()
+			r.checkOut = redactSecrets(buf.String())
 			lines := strings.Split(r.checkOut, "\n")
 			if len(lines) > 200 {
 				lines = lines[len(lines)-200:]
@@ -184,7 +189,7 @@ func (r *prRun) check() error {
 			fmt.Fprintf(os.Stderr, "%s #%d checks failed:\n%s\n", r.base, r.n, r.tail)
 		}
 	}
-	return r.putBody("")
+	return false, r.putBody("")
 }
 
 func (r *prRun) putBody(summary string) error {
@@ -197,7 +202,7 @@ func (r *prRun) judge() (bool, error) {
 		return false, nil
 	}
 	r.card.begin("Judge", r.wf.judge.Label)
-	verdict, tokens, err := runJudge(r.base, r.n, r.work, r.wf.judge, r.wf.body, judgeContract(r.is, r.login), r.def, r.wf.timeout)
+	verdict, tokens, err := runJudge(r.base, r.n, r.work, r.wf.judge, r.wf.body, judgeContract(r.is, r.login), r.def, r.wf.timeout, r.wf.egress, r.repo, r.home)
 	if err != nil {
 		return true, parkOnError(r.at, "judge", "The judge failed to run.", err)
 	}
@@ -247,6 +252,15 @@ func (r *prRun) merge() error {
 		spec := commentSpec{kind: "park", role: "merge", number: r.n, sentence: "The branch changed after the checks ran.", body: "ghafk checked `" + shortSha(r.after) + "`, but the worktree is now at `" + shortSha(head) + "`. ghafk merges only the commit that it checked.", footer: retryFooter()}
 		return park(r.at, "branch changed after checks", spec)
 	}
+	hits, err := scanChange(r.work, "origin/"+r.def, r.wf.secretsAllow)
+	if err != nil {
+		return parkOnError(r.at, "merge", "ghafk could not check the branch for secrets.", err)
+	}
+	if len(hits) > 0 {
+		spec := commentSpec{kind: "park", role: "merge", number: r.n, sentence: "The branch holds a value that looks like a secret. ghafk did not merge it.", body: secretParkBody(hits, false), footer: retryFooter()}
+		return park(r.at, "secret in the branch", spec)
+	}
+	markScanned(r.work)
 	if _, err := run(r.work, "git", "push", r.lease, "origin", r.after+":refs/heads/"+r.branch); err != nil {
 		return err
 	}
@@ -289,13 +303,13 @@ func (r *prRun) repair() (bool, error) {
 		r.tail,
 		"# Issue #"+r.issueNum+": "+r.is.Title,
 		strings.TrimSpace(r.is.Body))
-	answer, tokens, err := runWorker(r.base, r.n, r.work, worker, prompt, r.wf.timeout)
+	answer, tokens, err := runWorker(r.base, r.n, r.work, worker, prompt, r.wf.timeout, r.wf.egress, r.repo, r.home)
 	if err != nil {
 		sentence, body := runFailure("worker", err, r.wf.timeout)
 		spec := commentSpec{kind: "park", role: "worker", number: r.n, sentence: sentence, body: body, footer: retryFooter()}
 		return true, park(r.at, sentence, spec)
 	}
-	status, changed, err := workChanges(r.work, r.after)
+	_, changed, err := workChanges(r.work, r.after)
 	if err != nil {
 		return true, parkOnError(r.at, "worker", "ghafk could not read the repair worker's changes.", err)
 	}
@@ -303,8 +317,36 @@ func (r *prRun) repair() (bool, error) {
 		spec := commentSpec{kind: "repair", role: "worker", number: r.n, sentence: "The repair worker made no changes."}
 		return false, postComment(r.repo, r.prNum, spec, r.pick.Comments, r.login)
 	}
-	if err := commitChanges(r.work, status, "fix: repair checks for #"+r.issueNum); err != nil {
-		return true, parkOnError(r.at, "commit", "The repair commit failed.", err)
+	for attempt := 0; ; attempt++ {
+		committed, err := squashOnto(r.work, r.after, "fix: repair checks for #"+r.issueNum)
+		if err != nil {
+			return true, parkOnError(r.at, "commit", "The repair commit failed.", err)
+		}
+		if !committed {
+			spec := commentSpec{kind: "repair", role: "worker", number: r.n, sentence: "The repair worker made no changes."}
+			return false, postComment(r.repo, r.prNum, spec, r.pick.Comments, r.login)
+		}
+		hits, err := scanChange(r.work, r.after, r.wf.secretsAllow)
+		if err != nil {
+			return true, parkOnError(r.at, "push", "ghafk could not check the repair for secrets.", err)
+		}
+		if len(hits) == 0 {
+			break
+		}
+		if attempt == secretRepairs {
+			r.card.finish("failed", tokens)
+			return true, parkSecrets(r.at, "worker", r.n, hits)
+		}
+		more, used, err := runWorker(r.base, r.n, r.work, worker, joinParts(secretFeedback(hits), prompt), r.wf.timeout, r.wf.egress, r.repo, r.home)
+		if err != nil {
+			sentence, body := runFailure("worker", err, r.wf.timeout)
+			spec := commentSpec{kind: "park", role: "worker", number: r.n, sentence: sentence, body: body, footer: retryFooter()}
+			return true, park(r.at, sentence, spec)
+		}
+		tokens += used
+		if more != "" {
+			answer = more
+		}
 	}
 	sha, err := run(r.work, "git", "rev-parse", "HEAD")
 	if err != nil {
@@ -316,6 +358,7 @@ func (r *prRun) repair() (bool, error) {
 		}
 		return true, nil
 	}
+	markScanned(r.work)
 	if _, err := run(r.work, "git", "push", r.lease, "origin", r.branch); err != nil {
 		return true, parkOnError(r.at, "push", "The repair push was rejected.", err)
 	}

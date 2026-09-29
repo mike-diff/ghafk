@@ -2,7 +2,7 @@
 
 > ghafk (GH AFK) works GitHub issues while you are away from the keyboard. A timer on your machine gives each issue labeled `agent` to a coding agent, runs your checks, asks a second agent to judge the diff against a contract, and merges the pull request. GitHub is the only state.
 
-ghafk is a single Go binary for Linux (systemd) and macOS (launchd). Each repository is configured by `.ghafk/WORKFLOW.md`, and each machine by `~/.ghafk/config`. People steer it with slash commands in issue comments: `/start`, `/answer`, `/retry`, `/close`, `/stop`. Agents run with the user's credentials, so read the security model before you register a repository.
+ghafk is a single Go binary for Linux (systemd) and macOS (launchd). Each repository is configured by `.ghafk/WORKFLOW.md`, and each machine by `~/.ghafk/config`. People steer it with slash commands in issue comments: `/start`, `/answer`, `/retry`, `/close`, `/stop`. Each agent run and each checks run goes into an OS sandbox (bubblewrap on Linux, `sandbox-exec` on macOS) with an allowlisted egress proxy, so read the security model before you register a repository.
 
 ## Docs
 
@@ -12,7 +12,7 @@ ghafk is a single Go binary for Linux (systemd) and macOS (launchd). Each reposi
 - [Writing issues](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/writing-issues.md): how to write an issue that gives a correct pull request
 - [Troubleshooting](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/troubleshooting.md): causes and fixes for issues that do not start, park, or do not merge
 - [Security model](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/security.md): what ghafk prevents and what it leaves to you
-- [The engine account](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/separate-user.md): `ghafk engine setup` runs the engine as its own system account; manual steps and switch timers without overlap
+- [The engine account](https://raw.githubusercontent.com/mike-diff/ghafk/main/docs/separate-user.md): the deprecated `ghafk engine setup`; use `ghafk start` with the sandbox instead
 
 ## Agents
 

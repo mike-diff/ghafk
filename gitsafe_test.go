@@ -11,6 +11,7 @@ func gitSetup(t *testing.T) (repo, work, marker string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	t.Setenv("GIT_AUTHOR_NAME", "t")
 	t.Setenv("GIT_AUTHOR_EMAIL", "t@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "t")
@@ -82,6 +83,7 @@ func TestGitCommitSkipsRepositoryHooks(t *testing.T) {
 func TestGitRefusesAnUnknownWorktree(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	dir := filepath.Join(home, ".ghafk", "work", "x", "1")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)

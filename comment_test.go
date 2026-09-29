@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/mike-diff/ghafk/internal/harness"
+
 	"bytes"
 	"errors"
 	"fmt"
@@ -78,8 +80,9 @@ func TestQuestionWithoutOptionsRendersTheQuestionAlone(t *testing.T) {
 }
 
 func TestKilledRunRendersTheTimeoutSentence(t *testing.T) {
+	needSandbox(t)
 	var buf bytes.Buffer
-	err := runShell("groomer", ".", "sleep 30", "", 50*time.Millisecond, &buf, &buf)
+	err := runSandboxed(sandboxOpts{name: "groomer", dir: t.TempDir(), command: "sleep 30", timeout: 50 * time.Millisecond, role: &harness.Role{Command: "sh"}, home: t.TempDir()}, &buf, &buf)
 	if err == nil {
 		t.Fatal("the timed-out run must return an error")
 	}
@@ -220,4 +223,36 @@ func TestParkedErrorsCannotCloseTheirFence(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestBlockedHostsReachTheParkComment(t *testing.T) {
+	exitErr := exec.Command("sh", "-c", "exit 1").Run()
+	err := fmt.Errorf("worker: %w"+deniedMarker+"%s", exitErr, "blocked.example.test")
+	if _, body := runFailure("worker", err, time.Minute); !strings.Contains(body, "blocked.example.test") {
+		t.Fatalf("the park body does not name the blocked host: %q", body)
+	}
+	if text := failureEvidence("make test", err, "FAIL x", time.Minute); !strings.Contains(text, "blocked.example.test") {
+		t.Fatalf("the checks evidence does not name the blocked host: %q", text)
+	}
+}
+
+func TestParkCommentsShowPathsUnderTheHomeAsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
+	calls := fakeGH(t, nil)
+	err := errors.New("the program " + home + "/tools/x needs " + home + "/.ssh")
+	_ = parkOnError(parkPlace{repo: "repo", base: "demo", login: "owner", label: "agent", target: "5", issue: 5}, "worker", "The worker failed.", err)
+	if _, body := runFailure("worker", err, time.Minute); strings.Contains(body, home) {
+		t.Fatalf("a run failure posted the local home path: %s", body)
+	}
+	for _, c := range *calls {
+		if strings.Contains(c.String(), home) {
+			t.Fatalf("a park comment posted the local home path: %s", c)
+		}
+		if strings.Contains(c.String(), "~/tools/x") {
+			return
+		}
+	}
+	t.Fatalf("the park comment does not show the path under ~: %v", *calls)
 }

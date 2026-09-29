@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -134,12 +135,25 @@ func runFailure(role string, err error, limit time.Duration) (string, string) {
 	code, exited := exitCodeOf(err)
 	switch {
 	case exited && code >= 0:
-		return "The " + role + " exited with code " + strconv.Itoa(code) + ".", ""
+		return "The " + role + " exited with code " + strconv.Itoa(code) + ".", deniedNote(err)
 	case exited && strings.Contains(err.Error(), "signal: killed"):
-		return timeoutSentence(role, limit), ""
+		return timeoutSentence(role, limit), deniedNote(err)
 	default:
-		return "The " + role + " failed.", detailsBlock("Error", err.Error())
+		return "The " + role + " failed.", detailsBlock("Error", homeRelative(err.Error()))
 	}
+}
+
+const deniedMarker = "\nthe sandbox proxy denied: "
+
+func deniedNote(err error) string {
+	if err == nil {
+		return ""
+	}
+	_, hosts, ok := strings.Cut(err.Error(), deniedMarker)
+	if !ok {
+		return ""
+	}
+	return "The sandbox blocked connections to: " + neutralize(hosts) + ". If the run needs a host, add it to an `egress:` line in `.ghafk/WORKFLOW.md`."
 }
 
 func failureEvidence(command string, err error, output string, limit time.Duration) string {
@@ -150,6 +164,9 @@ func failureEvidence(command string, err error, output string, limit time.Durati
 		first = "The command `" + command + "` exited with code " + strconv.Itoa(code) + "."
 	case exited:
 		first = timeoutSentence("checks", limit)
+	}
+	if note := deniedNote(err); note != "" {
+		first += "\n\n" + note
 	}
 	return first + "\n\n" + evidenceDetails(output)
 }
@@ -241,8 +258,16 @@ func retryFooter() string {
 	return parkFooter("`/retry`. ghafk continues on the next tick.", "`/close` · `/stop`")
 }
 
+func homeRelative(text string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" || home == string(os.PathSeparator) {
+		return text
+	}
+	return strings.ReplaceAll(text, home, "~")
+}
+
 func parkOnError(at parkPlace, role, sentence string, err error) error {
-	spec := commentSpec{kind: "park", role: role, number: at.issue, sentence: sentence, body: fenced(err.Error()), footer: retryFooter()}
+	spec := commentSpec{kind: "park", role: role, number: at.issue, sentence: sentence, body: fenced(homeRelative(err.Error())), footer: retryFooter()}
 	return park(at, sentence, spec)
 }
 

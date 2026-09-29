@@ -32,23 +32,24 @@ ghafk start
 Requirements: Linux with systemd or macOS, Go 1.26 or newer, `git` with a
 commit identity, `gh` logged in, and one supported agent CLI.
 
-To keep agents away from the user's keys and other repositories, run
-`ghafk engine setup` from the user's own account. It asks for sudo, creates
-a system account with a hardened service, and asks for a fine-grained
-token. Install a harness as that account (`sudo -iu ghafk`, or `_ghafk` on
-macOS), then run `ghafk engine setup` again. Use `ghafk status`,
-`ghafk update` and `ghafk engine token` from the user's own account. The
-manual steps are in `docs/separate-user.md`. To add a repository later,
-run `ghafk init` in the user's own clone and push the workflow file. The
-engine finds each owned repository with `.ghafk/WORKFLOW.md` on its default
-branch.
+ghafk runs as the user and puts each agent run and each checks run in an
+OS sandbox (bubblewrap on Linux, `sandbox-exec` on macOS). The sandbox
+hides the user's home, keys and other repositories, and its only network
+is ghafk's egress proxy. The harnesses and logins that the user already
+has keep working. On stock Ubuntu 24.04, ghafk prints a one-time `sudo`
+step for bubblewrap. Claude Code with a subscription on macOS needs
+`claude setup-token` once. To add a repository later, run `ghafk init` in
+the user's own clone and push the workflow file. ghafk finds each owned
+repository with `.ghafk/WORKFLOW.md` on its default branch. The engine
+account (`ghafk engine setup`) is deprecated; to change, run
+`ghafk engine remove --purge`, then `ghafk start`.
 
 ## Configuration
 
 | File | Holds |
 |---|---|
-| `<repository>/.ghafk/WORKFLOW.md` | `label`, `checks`, `worker`, `groomer`, `judge`, `reconciler`, `timeout`, then prompt text. `checks` is necessary for a merge. |
-| `~/.ghafk/config` | `default: <harness> <model>`, `progress: <columns>`, `interval: <minutes>`, `skip: <owner/name>` |
+| `<repository>/.ghafk/WORKFLOW.md` | `label`, `checks`, `worker`, `groomer`, `judge`, `reconciler`, `timeout` (at most 720 minutes), `egress` (extra hosts for the sandbox proxy), `secrets-allow` (paths whose key-format matches do not hold a push), then prompt text. `checks` is necessary for a merge. |
+| `~/.ghafk/config` | `default: <harness> <model>`, `progress: <columns>`, `interval: <minutes>`, `skip: <owner/name>`, `repo: <owner/name>`, `bind: <directory>` (extra read-only directory in the sandbox), `env: <NAME> ...` (extra variables passed into runs), `egress: <host> ...` (extra hosts for every run), `local: <port> ...` (ports on this machine that runs may reach, such as a local model server) |
 | `~/.ghafk/repos` | Registered repository paths. Use `ghafk init` and `ghafk remove`. ghafk also works each owned repository with `.ghafk/WORKFLOW.md` on its default branch, cloned into `~/.ghafk/clones/`. |
 | `~/.ghafk/harnesses` | Extra or changed harness profiles: `name: parser command {model}`. |
 | `~/.ghafk/prompts/<role>.md` | Replaces the built-in prompt of `groom`, `worker`, `judge`, `reconcile` or `common`. It must keep the answer format of the built-in file, or ghafk parks the issue. |
@@ -88,8 +89,8 @@ access can use commands.
   `ghafk start`. Run `ghafk start` again.
 - **Every tick fails with `Bad credentials` or `401`:** the GitHub token
   expired. `ghafk status` shows its expiry date. The tick log warns in the
-  last 14 days. Run `ghafk engine token`, or with a manual setup replace
-  the token as `docs/separate-user.md` describes.
+  last 14 days. Run `gh auth login` again. With a deprecated engine
+  account, run `ghafk engine token`.
 - **Logs:** `journalctl --user -u ghafk.service` on Linux,
   `~/Library/Logs/ghafk.log` on macOS.
 

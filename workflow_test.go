@@ -1,13 +1,14 @@
 package main
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mike-diff/ghafk/internal/harness"
-
-	"os"
-	"path/filepath"
 )
 
 func TestParseWorkflowReconcilerDefaultsToGroomer(t *testing.T) {
@@ -71,6 +72,12 @@ func TestParseWorkflowDefaultsTimeoutToThirtyMinutes(t *testing.T) {
 
 func TestWorkflowComesFromTheDefaultBranchOnGitHub(t *testing.T) {
 	src := gitClone(t)
+	fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "repo view") {
+			return "main", nil
+		}
+		return "", nil
+	})
 	origin, err := run(src, "git", "remote", "get-url", "origin")
 	if err != nil {
 		t.Fatal(err)
@@ -96,5 +103,37 @@ func TestWorkflowComesFromTheDefaultBranchOnGitHub(t *testing.T) {
 	wf, err := loadWorkflow(engine, harness.Env{})
 	if err != nil || wf.checks != "go test ./..." {
 		t.Fatalf("checks = %q, %v; the engine's clone kept an old workflow after a change merged on GitHub", wf.checks, err)
+	}
+}
+
+func TestARunTimeoutStaysBelowTheStaleRunSweep(t *testing.T) {
+	env := harness.Env{Profiles: harness.Builtins()}
+	if _, err := parseWorkflow("---\nworker: w\ntimeout: 720\n---\n", env); err != nil {
+		t.Fatalf("a 12 hour timeout must be accepted: %v", err)
+	}
+	if _, err := parseWorkflow("---\nworker: w\ntimeout: 1500\n---\n", env); err == nil {
+		t.Fatal("a timeout longer than the stale-run sweep must be refused")
+	}
+	if time.Duration(maxTimeoutMinutes)*time.Minute >= staleRunAge {
+		t.Fatal("the longest run must be shorter than the age at which run folders are swept")
+	}
+}
+
+func TestTheWorkingTreeFallbackIgnoresEgressAndSecretsAllow(t *testing.T) {
+	fakeGH(t, func(string) (string, error) { return "", errors.New("offline") })
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, ".ghafk"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	text := "---\nworker: w\nchecks: true\negress: agent-chosen.example.com\nsecrets-allow: leak/\n---\n"
+	if err := os.WriteFile(filepath.Join(repo, ".ghafk", "WORKFLOW.md"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wf, err := loadWorkflow(repo, harness.Env{})
+	if err != nil || wf.checks != "true" {
+		t.Fatalf("the fallback must still read the workflow: %v %v", wf.checks, err)
+	}
+	if len(wf.egress) != 0 || len(wf.secretsAllow) != 0 {
+		t.Fatalf("a working-tree workflow widened egress or secrets-allow: %v %v", wf.egress, wf.secretsAllow)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mike-diff/ghafk/internal/ghapp"
@@ -45,5 +46,6 @@ func appMinter() func(repo string) (ghapp.Identity, error) {
 	if err != nil {
 		return func(string) (ghapp.Identity, error) { return ghapp.Identity{}, err }
 	}
+	registerSecretFile(filepath.Join(dir, "app.pem"))
 	return ghapp.Minter(dir)
 }

@@ -137,6 +137,7 @@ func ghEnv() []string {
 	if engineToken != "" && engineRemint != nil && time.Since(engineMintedAt) > tokenRefresh {
 		if token, err := engineRemint(); err == nil {
 			engineToken, engineMintedAt = token, time.Now()
+			registerSecret(token)
 		} else {
 			fmt.Fprintf(os.Stderr, "ghafk: app token refresh failed: %v\n", err)
 		}
@@ -152,12 +153,12 @@ var runGH = func(repo string, env []string, args ...string) (string, error) {
 }
 
 func gh(repo string, args ...string) (string, error) {
-	out, err := runGH(repo, ghEnv(), args...)
+	out, err := runGH(repo, ghEnv(), redactArgs(args)...)
 	return out, err
 }
 
 func ghOwner(repo string, args ...string) (string, error) {
-	out, err := runGH(repo, withOwnerToken(runEnv()), args...)
+	out, err := runGH(repo, withOwnerToken(runEnv()), redactArgs(args)...)
 	return out, err
 }
 

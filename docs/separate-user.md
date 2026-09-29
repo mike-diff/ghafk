@@ -1,5 +1,11 @@
 # The engine account
 
+> **Deprecated.** ghafk now runs as you and puts each agent run and each
+> checks run in an OS sandbox. Use `ghafk start`. See
+> [security](security.md). This page stays for machines that still run
+> an engine account. To change, run `ghafk engine remove --purge`, then
+> `ghafk start`.
+
 Use a dedicated account to limit what coding agents can access.
 The account is separate from your GitHub account and GitHub App.
 
@@ -58,7 +64,7 @@ Use these commands from your own account:
 | Task | Command |
 |---|---|
 | See the engine | `ghafk status` |
-| Update ghafk and the engine | `ghafk update` |
+| Update the engine | `ghafk update`, then `ghafk engine setup` to install the new binary for the engine |
 | Replace the GitHub token | `ghafk engine token` |
 | Stop or start the timer | `ghafk engine stop`, `ghafk engine start` |
 | Remove the engine | `ghafk engine remove`, or `ghafk engine remove --purge` to also delete the account |
@@ -332,7 +338,9 @@ Run `ghafk status` to see the repository.
 
 ## 10. Update ghafk
 
-With the automatic setup, run `ghafk update`.
+With the automatic setup, run `ghafk update`, then `ghafk engine setup`.
+`ghafk update` alone no longer updates the engine. Better: move to
+`ghafk start` (see the note at the top of this page).
 With a manual setup, run these commands from your personal account:
 
 ```sh

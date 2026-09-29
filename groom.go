@@ -30,7 +30,7 @@ func groomIssue(home, repo, base, login string, wf workflow, is issue) error {
 	}
 
 	branch := "groom/" + n
-	work := workDir(home, repo, n)
+	work := runWork(home, repo, n)
 	if err := clearStale(repo, work, branch); err != nil {
 		return err
 	}
@@ -40,12 +40,12 @@ func groomIssue(home, repo, base, login string, wf workflow, is issue) error {
 	defer discardWork(repo, work, branch)
 
 	var out bytes.Buffer
-	if err := runShell("groomer", work, wf.groomer.Command, groomPrompt(wf, is, login), wf.timeout, &out, os.Stderr); err != nil {
+	if err := runSandboxed(sandboxOpts{name: "groomer", dir: work, command: wf.groomer.Command, stdin: groomPrompt(wf, is, login), timeout: wf.timeout, role: &wf.groomer, egress: wf.egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		stepf(base, is.Number, "needs-human")
 		return runFailed(repo, base, is, wf.label, "groomer", err, wf.timeout, login, c)
 	}
 
-	answer, tokens := reportRoleUsage(base, is.Number, wf.groomer, out.String())
+	answer, tokens := reportRoleUsage(base, is.Number, wf.groomer, redactSecrets(out.String()))
 	answer = answerFrom(answer, "contract:", "question:")
 	switch {
 	case strings.HasPrefix(answer, "contract:") && strings.TrimSpace(strings.TrimPrefix(answer, "contract:")) != "":

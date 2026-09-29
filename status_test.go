@@ -9,6 +9,7 @@ import (
 
 func TestRepoStateNamesTheProblem(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv(configDirEnv, "")
 	repo := t.TempDir()
 	if got := repoState(repo); !strings.Contains(got, "WORKFLOW.md") {
 		t.Fatalf("a repository without a workflow file shows %q; it must say what is missing", got)

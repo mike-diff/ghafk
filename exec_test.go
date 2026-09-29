@@ -2,11 +2,12 @@ package main
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mike-diff/ghafk/internal/harness"
 )
 
 func TestWorkerChanged(t *testing.T) {
@@ -18,17 +19,6 @@ func TestWorkerChanged(t *testing.T) {
 	}
 	if workerChanged("", "b", "b") {
 		t.Fatal("clean tree with unmoved HEAD means no changes")
-	}
-}
-
-func TestRunShellStripsAnInheritedToken(t *testing.T) {
-	t.Setenv("GH_TOKEN", "inherited-secret")
-	var out bytes.Buffer
-	if err := runShell("probe", t.TempDir(), `printenv GH_TOKEN || true`, "", time.Minute, &out, os.Stderr); err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.TrimSpace(out.String()); got != "" {
-		t.Fatalf("runShell leaked an inherited GH_TOKEN: %q", got)
 	}
 }
 
@@ -65,15 +55,20 @@ func TestRunKeepsLeadingSpacesOfTheFirstLine(t *testing.T) {
 	}
 }
 
-func TestRunShellReturnsWhenAnEscapedChildHoldsItsOutput(t *testing.T) {
+func TestASandboxedRunReturnsWhenAnEscapedChildHoldsItsOutput(t *testing.T) {
+	needSandbox(t)
 	old := pipeGrace
 	pipeGrace = 100 * time.Millisecond
 	defer func() { pipeGrace = old }()
+	home := t.TempDir()
 	var out bytes.Buffer
 	start := time.Now()
-	_ = runShell("worker", t.TempDir(), "setsid sleep 3 & echo started", "", time.Minute, &out, &out)
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
-		t.Fatalf("runShell waited %v for a child that escaped the process group; the tick would hang", elapsed)
+	err := runSandboxed(sandboxOpts{name: "worker", dir: t.TempDir(), command: "setsid sleep 30 & echo started", timeout: time.Minute, role: &harness.Role{Command: "sh"}, home: home}, &out, &out)
+	if err != nil || !strings.Contains(out.String(), "started") {
+		t.Fatalf("the run did not start its command: %v\n%s", err, out.String())
+	}
+	if elapsed := time.Since(start); elapsed > 8*time.Second {
+		t.Fatalf("the run waited %v for a child that escaped the process group; the tick would hang", elapsed)
 	}
 }
 

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/mike-diff/ghafk/internal/harness"
+
 	"bytes"
 	"os"
 	"strings"
@@ -37,12 +39,13 @@ func TestEngineEnvCarriesTheEngineTokenWhileRunShellStripsIt(t *testing.T) {
 	if seen != "GH_TOKEN=engine-secret" {
 		t.Fatalf("engine gh env carries %q, want the engine token", seen)
 	}
+	needSandbox(t)
 	var out bytes.Buffer
-	if err := runShell("probe", t.TempDir(), `if [ -n "$GH_TOKEN" ]; then echo "$GH_TOKEN"; else echo none; fi`, "", time.Minute, &out, os.Stderr); err != nil {
+	if err := runSandboxed(sandboxOpts{name: "probe", dir: t.TempDir(), command: `if [ -n "$GH_TOKEN" ]; then echo "$GH_TOKEN"; else echo none; fi`, timeout: time.Minute, role: &harness.Role{Command: "sh"}, home: t.TempDir()}, &out, os.Stderr); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.TrimSpace(out.String()); got != "none" {
-		t.Fatalf("runShell leaked GH_TOKEN to its child: %q", got)
+		t.Fatalf("a sandboxed run leaked GH_TOKEN to its child: %q", got)
 	}
 }
 
