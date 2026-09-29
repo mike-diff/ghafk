@@ -26,6 +26,7 @@ type Role struct {
 	Command string
 	Parser  string
 	Label   string
+	Profile string
 }
 
 var ValidModel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@-]*$`)
@@ -113,6 +114,7 @@ func ResolveRole(value string, profiles map[string]Profile) (Role, error) {
 				Command: strings.ReplaceAll(p.Command, "{model}", model),
 				Parser:  p.Parser,
 				Label:   fields[0] + " " + model,
+				Profile: fields[0],
 			}, nil
 		}
 	}

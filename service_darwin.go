@@ -24,6 +24,9 @@ func launchdPrint() (string, error) {
 }
 
 func start() error {
+	if l, ok := installedEngine(); ok {
+		return fmt.Errorf("a system ghafk engine still runs as the %s account; agents there run without the sandbox. Run `ghafk engine remove --purge`, then `ghafk start`", l.user)
+	}
 	exe, err := selfPath()
 	if err != nil {
 		return err

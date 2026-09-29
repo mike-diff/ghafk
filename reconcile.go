@@ -59,7 +59,7 @@ func reconcileIssue(home, repo, base, login string, wf workflow, contract, befor
 	defer stopWorking(repo, n)
 	stepf(base, is.Number, "reconcile")
 	branch := "reconcile/" + n
-	work := workDir(home, repo, n)
+	work := runWork(home, repo, n)
 	if err := clearStale(repo, work, branch); err != nil {
 		return err
 	}
@@ -73,10 +73,10 @@ func reconcileIssue(home, repo, base, login string, wf workflow, contract, befor
 	}
 	prompt := joinParts(rolePrompt("reconcile"), wf.body, contract, "# Landed\n"+capDiff(diff))
 	var out bytes.Buffer
-	if err := runShell("reconciler", work, wf.reconciler.Command, prompt, wf.timeout, &out, os.Stderr); err != nil {
+	if err := runSandboxed(sandboxOpts{name: "reconciler", dir: work, command: wf.reconciler.Command, stdin: prompt, timeout: wf.timeout, role: &wf.reconciler, egress: wf.egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		return err
 	}
-	answer, _ := reportRoleUsage(base, is.Number, wf.reconciler, out.String())
+	answer, _ := reportRoleUsage(base, is.Number, wf.reconciler, redactSecrets(out.String()))
 	answer = answerFrom(answer, "valid:", "stale:", "done:")
 	verdict := "needs-human"
 	for _, v := range []string{"valid", "stale", "done"} {

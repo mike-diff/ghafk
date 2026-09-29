@@ -26,6 +26,12 @@ func main() {
 	case "help", "-h", "--help":
 		fmt.Print(usageText)
 		return
+	case "__sandbox":
+		if err := sandboxInitCmd(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ghafk:", err)
+			os.Exit(1)
+		}
+		return
 	default:
 		usage()
 	}
@@ -73,11 +79,11 @@ Usage:
   ghafk harness list                       list harness profiles and whether each is installed
   ghafk harness default <harness> <model>  set the machine default worker
   ghafk harness test <harness> [model]     check a harness in a scratch repository
-  ghafk engine setup                       run the engine as its own system account (asks sudo); run again to refresh
-  ghafk engine token                       replace the engine's GitHub token
-  ghafk engine start | stop                turn the engine's timer on or off
+  ghafk engine setup                       deprecated: run the engine as its own system account (asks sudo)
+  ghafk engine token                       deprecated: replace the engine's GitHub token
+  ghafk engine start | stop                deprecated: turn the engine's timer on or off
   ghafk engine remove [--purge]            remove the engine service; --purge also deletes its account and home
-  ghafk update                             install the newest ghafk from main, then refresh the engine if there is one
+  ghafk update                             install the newest ghafk from main
   ghafk help                               show this help
 `
 

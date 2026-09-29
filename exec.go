@@ -6,18 +6,25 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
-	"syscall"
 	"time"
 )
 
 func discardWork(repo, work, branch string) {
-	worktreeRemove(repo, work)
+	clearRunTree(repo, work)
 	_, _ = run(repo, "git", "branch", "-D", branch)
+}
+
+func clearRunTree(repo, work string) {
+	parent := runParent(work)
+	for _, stale := range staleRuns(parent) {
+		worktreeRemove(repo, stale)
+	}
+	worktreeRemove(repo, parent)
 }
 
 func firstLines(s string, n int) string {
@@ -28,13 +35,13 @@ func firstLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
+var ghTokenEnvNames = []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"}
+
 func runEnv() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		name, _, _ := strings.Cut(kv, "=")
-		switch name {
-		case "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN":
-		default:
+		if !slices.Contains(ghTokenEnvNames, name) {
 			env = append(env, kv)
 		}
 	}
@@ -46,7 +53,7 @@ func workerChanged(status, head, before string) bool {
 }
 
 func clearStale(repo, work, branch string) error {
-	worktreeRemove(repo, work)
+	clearRunTree(repo, work)
 	run(repo, "git", "worktree", "prune")
 	if listed, err := run(repo, "git", "branch", "--list", branch); err == nil && listed != "" {
 		_, err := run(repo, "git", "branch", "-D", branch)
@@ -57,6 +64,7 @@ func clearStale(repo, work, branch string) error {
 
 func worktreeRemove(repo, work string) {
 	delete(worktreeGitDirs, work)
+	delete(worktreePointers, work)
 	if _, err := run(repo, "git", "worktree", "remove", "--force", work); err != nil {
 		os.RemoveAll(work)
 	}
@@ -67,39 +75,26 @@ var (
 	toolTimeout = 10 * time.Minute
 )
 
-func runShell(name, dir, command, stdin string, timeout time.Duration, stdout, stderr io.Writer) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	cmd.Dir = dir
-	cmd.Env = runEnv()
-	cmd.Stdin = strings.NewReader(stdin)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.WaitDelay = pipeGrace
-	cmd.Cancel = func() error {
-		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != syscall.ESRCH {
-			return err
-		}
-		return nil
-	}
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s: %w", name, err)
-	}
-	return nil
-}
-
 func run(dir, name string, args ...string) (string, error) {
 	return runWithEnv(dir, name, nil, args...)
 }
 
 func runWithEnv(dir, name string, env []string, args ...string) (string, error) {
+	out, err := runExact(dir, name, env, args...)
+	return strings.TrimLeft(strings.TrimRight(out, " \t\r\n"), "\r\n"), err
+}
+
+func runExact(dir, name string, env []string, args ...string) (string, error) {
 	stdin := ""
 	switch name {
 	case "gh":
 		args, stdin = bodyToStdin(args)
 	case "git":
+		if len(args) > 0 && args[0] == "push" {
+			if err := pushAllowed(dir); err != nil {
+				return "", err
+			}
+		}
 		hardened, err := hardenGit(dir, args)
 		if err != nil {
 			return "", err
@@ -121,7 +116,7 @@ func runWithEnv(dir, name string, env []string, args ...string) (string, error) 
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
-	out := strings.TrimLeft(strings.TrimRight(stdout.String(), " \t\r\n"), "\r\n")
+	out := stdout.String()
 	if err != nil {
 		err = fmt.Errorf("%s %s: %w", name, clipArgs(args), err)
 		if detail := firstLine(stderr.String()); detail != "" {
@@ -175,6 +170,10 @@ func clipArgs(args []string) string {
 }
 
 func workDir(home, repo, issueNum string) string {
+	return filepath.Join(home, ".ghafk", "work", repoSlug(repo), issueNum)
+}
+
+func repoSlug(repo string) string {
 	sum := sha256.Sum256([]byte(repo))
-	return filepath.Join(home, ".ghafk", "work", filepath.Base(repo)+"-"+hex.EncodeToString(sum[:4]), issueNum)
+	return filepath.Base(repo) + "-" + hex.EncodeToString(sum[:4])
 }

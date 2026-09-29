@@ -154,7 +154,7 @@ func harnessFail(name, reason string) harnessResult {
 }
 
 func harnessFileCheck(dir, name, want string) harnessResult {
-	data, err := os.ReadFile(filepath.Join(dir, name))
+	data, err := readSmallRegularFile(filepath.Join(dir, name), 1<<16)
 	if err != nil {
 		return harnessFail(name, "missing")
 	}
@@ -196,7 +196,7 @@ func harnessTest(profile, model string) error {
 		return err
 	}
 	var out bytes.Buffer
-	runErr := runShell("worker", work, r.Command, harnessTestPrompt, harnessTestTimeout, &out, os.Stderr)
+	runErr := runSandboxed(sandboxOpts{name: "worker", dir: work, command: r.Command, stdin: harnessTestPrompt, timeout: harnessTestTimeout, role: &r}, &out, os.Stderr)
 
 	results := make([]harnessResult, 0, 6)
 	if path, err := harnessLookPath(r.Command); err != nil {

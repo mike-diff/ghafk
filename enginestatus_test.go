@@ -13,6 +13,7 @@ func TestATickThatFailsEarlyStillWritesItsStatus(t *testing.T) {
 	useOwnerToken(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	cfg := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cfg, "env"), []byte("GH_TOKEN=x\n"), 0o644); err != nil {
 		t.Fatal(err)

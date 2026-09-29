@@ -26,14 +26,7 @@ func update() error {
 		return err
 	}
 	fmt.Println("ghafk: installed " + bin)
-	l, ok := installedEngine()
-	if !ok || isEngineAccount(l) {
-		return nil
-	}
-	fmt.Println("ghafk: updating the engine with the new binary")
-	refresh := exec.Command(bin, "engine", "setup")
-	refresh.Stdin, refresh.Stdout, refresh.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return refresh.Run()
+	return nil
 }
 
 func installedBinary() (string, error) {

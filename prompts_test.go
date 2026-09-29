@@ -9,6 +9,7 @@ import (
 
 func TestBuiltinPromptsKeepTheMarkersTheEngineParses(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv(configDirEnv, "")
 	for role, markers := range map[string][]string{
 		"groom":     {"`question:`", "`contract:`", "(recommended)", "`N. <option>`"},
 		"judge":     {"`approve:`", "`reject:`", "`pass <k>: <evidence>`", "`fail <k>:", "`manual <k>`"},
@@ -29,6 +30,7 @@ func TestBuiltinPromptsKeepTheMarkersTheEngineParses(t *testing.T) {
 
 func TestGroomPromptListsContractSectionsInOrder(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv(configDirEnv, "")
 	text := rolePrompt("groom")
 	last := -1
 	for _, section := range []string{"## Problem", "## Change", "## Commit", "## Acceptance", "## Files", "## Assumptions"} {
@@ -48,6 +50,7 @@ func TestGroomPromptListsContractSectionsInOrder(t *testing.T) {
 func TestPromptOverrideReplacesOnlyItsRole(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	dir := filepath.Join(home, ".ghafk", "prompts")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -69,6 +72,7 @@ func TestPromptOverrideReplacesOnlyItsRole(t *testing.T) {
 
 func TestWorkerPromptNamesTheRepositoryChecks(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv(configDirEnv, "")
 	got := workerPrompt(workflow{checks: "go test ./..."})
 	if !strings.Contains(got, "these checks pass: `go test ./...`") || strings.Contains(got, "{checks}") {
 		t.Fatalf("worker prompt does not name the checks command:\n%s", got)

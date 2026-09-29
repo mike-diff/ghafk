@@ -60,6 +60,9 @@ func TestSettingsRejectMistakes(t *testing.T) {
 		"interval: two\n",
 		"skip: private\n",
 		"repo: tool\n",
+		"egress: 127.0.0.1\n",
+		"egress: localhost\n",
+		"egress: *.com\n",
 	} {
 		if _, err := loadSettings(writeSettings(t, text)); err == nil {
 			t.Fatalf("%q was accepted; a typo would silently change the card or the timer", strings.TrimSpace(text))

@@ -36,7 +36,7 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 	}
 
 	branch := "agent/" + n
-	work := workDir(home, repo, n)
+	work := runWork(home, repo, n)
 	if err := clearStale(repo, work, branch); err != nil {
 		return err
 	}
@@ -53,11 +53,11 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 
 	stepf(base, is.Number, "worker")
 	prompt := joinParts(workerPrompt(wf), wf.body, contract, "# Issue #"+n+": "+is.Title, strings.TrimSpace(is.Body))
-	answer, tokens, err := runWorker(base, is.Number, work, worker, prompt, wf.timeout)
+	answer, tokens, err := runWorker(base, is.Number, work, worker, prompt, wf.timeout, wf.egress, repo, home)
 	if err != nil {
 		return runFailed(repo, base, is, wf.label, "worker", err, wf.timeout, login, c)
 	}
-	status, changed, err := workChanges(work, before)
+	_, changed, err := workChanges(work, before)
 	if err != nil {
 		return parkOnError(at, "worker", "ghafk could not read the worker's changes.", err)
 	}
@@ -70,8 +70,36 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 
 	subject := commitSubject(contract, is.Title)
 	stepf(base, is.Number, "commit")
-	if err := commitChanges(work, status, subject, "Closes #"+n); err != nil {
-		return parkOnError(at, "commit", "The commit failed.", err)
+	for attempt := 0; ; attempt++ {
+		committed, err := squashOnto(work, "origin/"+def, subject, "Closes #"+n)
+		if err != nil {
+			return parkOnError(at, "commit", "The commit failed.", err)
+		}
+		if !committed {
+			c.finish("failed", tokens)
+			spec := commentSpec{kind: "park", role: "worker", number: is.Number, sentence: "The worker made no changes.", footer: retryFooter()}
+			return park(at, "the worker made no changes", spec)
+		}
+		hits, err := scanChange(work, "origin/"+def, wf.secretsAllow)
+		if err != nil {
+			return parkOnError(at, "push", "ghafk could not check the change for secrets.", err)
+		}
+		if len(hits) == 0 {
+			break
+		}
+		if attempt == secretRepairs {
+			c.finish("failed", tokens)
+			return parkSecrets(at, "worker", is.Number, hits)
+		}
+		stepf(base, is.Number, "secret repair")
+		more, used, err := runWorker(base, is.Number, work, worker, joinParts(secretFeedback(hits), prompt), wf.timeout, wf.egress, repo, home)
+		if err != nil {
+			return runFailed(repo, base, is, wf.label, "worker", err, wf.timeout, login, c)
+		}
+		tokens += used
+		if more != "" {
+			answer = more
+		}
 	}
 
 	if held, err := holdWorkflowsBeforePush(at, work, def); held || err != nil {
@@ -82,6 +110,7 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 	}
 
 	stepf(base, is.Number, "push")
+	markScanned(work)
 	if _, err := run(work, "git", "push", "-u", "origin", branch); err != nil {
 		return parkOnError(at, "push", "The push was rejected.", err)
 	}
@@ -107,12 +136,12 @@ func runFailed(repo, base string, is issue, label, role string, runErr error, li
 	return park(parkPlace{repo: repo, base: base, login: login, label: label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments, card: c}, sentence, spec)
 }
 
-func runWorker(base string, n int, work string, worker harness.Role, prompt string, timeout time.Duration) (string, int, error) {
+func runWorker(base string, n int, work string, worker harness.Role, prompt string, timeout time.Duration, egress []string, repo, home string) (string, int, error) {
 	var out bytes.Buffer
-	if err := runShell("worker", work, worker.Command, prompt, timeout, &out, os.Stderr); err != nil {
+	if err := runSandboxed(sandboxOpts{name: "worker", dir: work, command: worker.Command, stdin: prompt, timeout: timeout, role: &worker, egress: egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		return "", 0, err
 	}
-	answer, tokens := reportRoleUsage(base, n, worker, out.String())
+	answer, tokens := reportRoleUsage(base, n, worker, redactSecrets(out.String()))
 	if answer != "" {
 		fmt.Println(answer)
 	}
@@ -129,19 +158,4 @@ func workChanges(work, since string) (string, bool, error) {
 		return "", false, err
 	}
 	return status, workerChanged(status, head, since), nil
-}
-
-func commitChanges(work, status string, messages ...string) error {
-	if status == "" {
-		return nil
-	}
-	if _, err := run(work, "git", "add", "-A"); err != nil {
-		return err
-	}
-	args := []string{"commit"}
-	for _, m := range messages {
-		args = append(args, "-m", m)
-	}
-	_, err := run(work, "git", args...)
-	return err
 }

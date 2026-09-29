@@ -47,7 +47,7 @@ func enginePath(home string) string {
 func engineServiceUnit(l engineLayout) string {
 	return "[Unit]\nDescription=ghafk engine tick\nWants=network-online.target\nAfter=network-online.target\n\n" +
 		"[Service]\nType=oneshot\nUser=" + l.user + "\nGroup=" + l.user + "\nWorkingDirectory=" + l.home + "\n" +
-		"Environment=PATH=" + enginePath(l.home) + "\nEnvironment=" + configDirEnv + "=" + l.etc + "\nExecStart=" + l.bin + " tick\nTimeoutStartSec=4h\n" +
+		"Environment=PATH=" + enginePath(l.home) + "\nEnvironment=" + configDirEnv + "=" + l.etc + "\nExecStart=" + l.bin + " tick\nTimeoutStartSec=infinity\n" +
 		strings.Join(engineHardening(l.home), "\n") + "\n"
 }
 

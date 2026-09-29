@@ -18,6 +18,7 @@ func harnessHome(t *testing.T, harnesses string) string {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	return home
 }
 
@@ -68,6 +69,7 @@ func TestHarnessListSortsAndShowsDefault(t *testing.T) {
 }
 
 func TestHarnessTestAllChecksPass(t *testing.T) {
+	needSandbox(t)
 	script := harnessScript(t, "printf after > note.txt\necho ghafk-shell-ok > shell.txt\necho DONE\n")
 	home := harnessHome(t, "text: text "+script+"\n")
 	if err := os.WriteFile(filepath.Join(home, ".ghafk", "config"), []byte("default: text m1\n"), 0o644); err != nil {
@@ -95,6 +97,7 @@ func TestHarnessTestAllChecksPass(t *testing.T) {
 }
 
 func TestHarnessTestShellCheckFails(t *testing.T) {
+	needSandbox(t)
 	script := harnessScript(t, "printf after > note.txt\necho DONE\n")
 	harnessHome(t, "text: text "+script+"\n")
 	var err error

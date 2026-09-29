@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -21,9 +23,13 @@ type workflow struct {
 	reconciler    harness.Role
 	label         string
 	checks        string
+	egress        []string
+	secretsAllow  []string
 	body          string
 	timeout       time.Duration
 }
+
+const maxTimeoutMinutes = 12 * 60
 
 func parseWorkflow(data string, henv harness.Env) (workflow, error) {
 	wf := workflow{label: "agent", timeout: 30 * time.Minute}
@@ -57,10 +63,24 @@ func parseWorkflow(data string, henv harness.Env) (workflow, error) {
 			wf.label = strings.TrimSpace(value)
 		case "checks":
 			wf.checks = strings.TrimSpace(value)
+		case "egress":
+			for _, host := range strings.Fields(value) {
+				if !validEgressHost(host) {
+					return wf, fmt.Errorf("WORKFLOW.md: egress %q must be a host name such as npm.internal.example.com", host)
+				}
+				wf.egress = append(wf.egress, strings.ToLower(host))
+			}
+		case "secrets-allow":
+			for _, path := range strings.Fields(value) {
+				if filepath.IsAbs(path) || !filepath.IsLocal(strings.TrimSuffix(path, "/")) {
+					return wf, fmt.Errorf("WORKFLOW.md: secrets-allow %q must be a path inside the repository", path)
+				}
+				wf.secretsAllow = append(wf.secretsAllow, path)
+			}
 		case "timeout":
 			minutes, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil || minutes <= 0 {
-				return wf, fmt.Errorf("WORKFLOW.md: bad timeout")
+			if err != nil || minutes <= 0 || minutes > maxTimeoutMinutes {
+				return wf, fmt.Errorf("WORKFLOW.md: bad timeout (1 to %d minutes)", maxTimeoutMinutes)
 			}
 			wf.timeout = time.Duration(minutes) * time.Minute
 		}
@@ -104,13 +124,33 @@ func parseWorkflow(data string, henv harness.Env) (workflow, error) {
 	return wf, nil
 }
 
+func validEgressHost(host string) bool {
+	if !egressName.MatchString(host) || !strings.Contains(host, ".") || strings.EqualFold(host, "localhost") {
+		return false
+	}
+	if net.ParseIP(strings.Trim(host, "[]")) != nil {
+		return false
+	}
+	if strings.HasPrefix(host, "*.") {
+		rest := host[2:]
+		return strings.Contains(rest, ".") && !strings.Contains(rest, "*")
+	}
+	return !strings.Contains(host, "*")
+}
+
+var egressName = regexp.MustCompile(`^[A-Za-z0-9.*-]+$`)
+
 func loadWorkflow(repo string, henv harness.Env) (workflow, error) {
-	if text, err := run(repo, "git", "show", "origin/HEAD:.ghafk/WORKFLOW.md"); err == nil {
-		return parseWorkflow(text, henv)
+	if def, err := defaultBranch(repo); err == nil {
+		if text, err := run(repo, "git", "show", "origin/"+def+":.ghafk/WORKFLOW.md"); err == nil {
+			return parseWorkflow(text, henv)
+		}
 	}
 	data, err := os.ReadFile(filepath.Join(repo, ".ghafk", "WORKFLOW.md"))
 	if err != nil {
 		return workflow{}, err
 	}
-	return parseWorkflow(string(data), henv)
+	wf, err := parseWorkflow(string(data), henv)
+	wf.egress, wf.secretsAllow = nil, nil
+	return wf, err
 }

@@ -46,6 +46,7 @@ func TestDefaultProfileFromConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	t.Setenv(configDirEnv, "")
 	henv, err := loadHarnessEnv()
 	if err != nil {
 		t.Fatal(err)

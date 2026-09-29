@@ -25,9 +25,9 @@ func TestTimerRunsOnTheWallClock(t *testing.T) {
 	}
 }
 
-func TestServiceHasAStartTimeout(t *testing.T) {
-	if unit := serviceFor("/bin/ghafk", "/usr/bin"); !strings.Contains(unit, "TimeoutStartSec=") {
-		t.Fatalf("a hung tick would block every later tick forever:\n%s", unit)
+func TestServiceNeverKillsALongRun(t *testing.T) {
+	if unit := serviceFor("/bin/ghafk", "/usr/bin"); !strings.Contains(unit, "TimeoutStartSec=infinity\n") {
+		t.Fatalf("a unit time limit kills a run that is inside its own timeout, with no park comment, and the issue reruns every tick:\n%s", unit)
 	}
 }
 

@@ -37,26 +37,69 @@ func TestWorkChangesSeesEditsAndWorkerCommits(t *testing.T) {
 	if err != nil || !changed || status == "" {
 		t.Fatalf("uncommitted edit: status=%q changed=%v err=%v", status, changed, err)
 	}
-	if err := commitChanges(dir, status, "feat: add a", "Closes #5"); err != nil {
+	if _, err := run(dir, "git", "add", "-A"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(dir, "git", "commit", "-m", "feat: add a"); err != nil {
 		t.Fatal(err)
 	}
 	status, changed, err = workChanges(dir, base)
 	if err != nil || !changed || status != "" {
 		t.Fatalf("a commit made by the worker itself still counts as a change: status=%q changed=%v err=%v", status, changed, err)
 	}
-	msg, _ := run(dir, "git", "log", "-1", "--format=%B")
-	if msg != "feat: add a\n\nCloses #5" {
+}
+
+func TestSquashFoldsWorkerCommitsIntoOne(t *testing.T) {
+	dir, base := gitRepo(t)
+	for _, name := range []string{"a.txt", "b.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := run(dir, "git", "add", "-A"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := run(dir, "git", "commit", "-m", "worker "+name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "c.txt"), []byte("c\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	committed, err := squashOnto(dir, base, "feat: add a", "Closes #5")
+	if err != nil || !committed {
+		t.Fatalf("squash failed: %v %v", committed, err)
+	}
+	if count, _ := run(dir, "git", "rev-list", "--count", base+"..HEAD"); count != "1" {
+		t.Fatalf("want one commit on top of the base, got %s", count)
+	}
+	if msg, _ := run(dir, "git", "log", "-1", "--format=%B"); msg != "feat: add a\n\nCloses #5" {
 		t.Fatalf("commit message %q", msg)
+	}
+	if files, _ := run(dir, "git", "diff", "--name-only", base, "HEAD"); files != "a.txt\nb.txt\nc.txt" {
+		t.Fatalf("the squashed commit lost changes: %q", files)
 	}
 }
 
-func TestCommitChangesSkipsACleanTree(t *testing.T) {
+func TestSquashOfNoNetChangeMakesNoCommit(t *testing.T) {
 	dir, base := gitRepo(t)
-	if err := commitChanges(dir, "", "feat: nothing"); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := run(dir, "git", "add", "-A"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(dir, "git", "commit", "-m", "add"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(dir, "git", "rm", "-q", "a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	committed, err := squashOnto(dir, base, "feat: nothing")
+	if err != nil || committed {
+		t.Fatalf("a change that nets to nothing must not commit: %v %v", committed, err)
+	}
 	if head, _ := run(dir, "git", "rev-parse", "HEAD"); head != base {
-		t.Fatal("a clean tree produced a commit")
+		t.Fatal("HEAD must stay at the base")
 	}
 }
 
@@ -77,6 +120,7 @@ func gitClone(t *testing.T) string {
 
 func runIssueWith(t *testing.T, repo, worker string) []ghCall {
 	t.Helper()
+	needSandbox(t)
 	calls := fakeGH(t, func(cmd string) (string, error) {
 		if strings.HasPrefix(cmd, "repo view") {
 			return "main", nil
@@ -135,6 +179,7 @@ func TestAnEmptyContractParksInsteadOfGroomingAgain(t *testing.T) {
 }
 
 func TestAWorkflowChangeIsNeverPushed(t *testing.T) {
+	needSandbox(t)
 	repo := gitClone(t)
 	calls := runIssueWith(t, repo, `mkdir -p .github/workflows && echo "name: x" > .github/workflows/x.yml`)
 	if !called(calls, "issue edit 5 --add-label needs-human --remove-label agent") {
@@ -153,9 +198,43 @@ func TestAWorkflowChangeIsNeverPushed(t *testing.T) {
 }
 
 func TestAnOrdinaryChangeIsStillPushed(t *testing.T) {
+	needSandbox(t)
 	repo := gitClone(t)
 	runIssueWith(t, repo, `mkdir -p docs && echo x > docs/github.md`)
 	if remote, _ := run(repo, "git", "ls-remote", "--heads", "origin", "agent/5"); remote == "" {
 		t.Fatal("a change outside .github/ was not pushed")
+	}
+}
+
+func TestAContractWithASecretIsStoredRedacted(t *testing.T) {
+	needSandbox(t)
+	resetSecretRegistry(t)
+	repo := gitClone(t)
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "repo view") {
+			return "main", nil
+		}
+		return "", nil
+	})
+	token := dummyGitHubToken()
+	wf := workflow{label: "agent", groomer: harness.Role{Command: `printf 'contract:\nUse ` + token + ` to call the API.\n'`}, timeout: time.Minute}
+	if err := groomIssue(t.TempDir(), repo, "demo", "owner", wf, issue{Number: 5, Title: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	stored := false
+	for _, c := range *calls {
+		for _, arg := range c.args {
+			st, ok := parseCard(strings.TrimPrefix(arg, "body="))
+			if !ok || st.Contract == "" {
+				continue
+			}
+			stored = true
+			if strings.Contains(st.Contract, token) || !strings.Contains(st.Contract, secretPlaceholder) {
+				t.Fatalf("the card state kept the secret: %q", st.Contract)
+			}
+		}
+	}
+	if !stored {
+		t.Fatalf("no card with the contract was written: %v", *calls)
 	}
 }

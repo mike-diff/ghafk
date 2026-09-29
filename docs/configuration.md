@@ -2,8 +2,8 @@
 
 This page lists every command, setting, label and file that ghafk uses.
 
-To limit access to your personal files, run the engine as
-[its own account](separate-user.md).
+Each agent run and each checks run is in an OS sandbox that hides your
+personal files. See [security](security.md).
 
 - [Commands](#commands)
 - [Repositories](#repositories)
@@ -19,11 +19,11 @@ To limit access to your personal files, run the engine as
 |---|---|
 | `ghafk init [path]` | Registers a repository. Writes `.ghafk/WORKFLOW.md` if the file does not exist. Creates the `agent` label and one `harness:<name>` label for each installed harness. |
 | `ghafk remove [path]` | Unregisters a repository. Keeps its files, labels and pull requests. Lists the work that is still in progress. It cannot remove a repository that ghafk found on GitHub. See [repositories](#repositories). |
-| `ghafk engine setup` | Runs the engine as a separate system account. Asks for sudo, creates the account, installs the binary and a service, copies your `config`, `harnesses`, `prompts` and App files, and asks for a GitHub token. Run it again to apply changes to these files or after you install a harness. See [the engine account](separate-user.md). |
-| `ghafk engine token` | Replaces the GitHub token of the engine. |
-| `ghafk engine start`, `ghafk engine stop` | Turns the timer of the engine on or off. |
-| `ghafk engine remove [--purge]` | Removes the service and the binary of the engine. `--purge` also deletes the account and its home. |
-| `ghafk update` | Installs the newest ghafk from `main`. If an engine exists, it then runs `ghafk engine setup` with the new binary. |
+| `ghafk engine setup` | Deprecated. Runs the engine as a separate system account. Use `ghafk start` instead: each agent run and each checks run is in an OS sandbox. See [the engine account](security.md#the-engine-account-deprecated). |
+| `ghafk engine token` | Deprecated. Replaces the GitHub token of an engine account. |
+| `ghafk engine start`, `ghafk engine stop` | Deprecated. Turns the timer of an engine account on or off. |
+| `ghafk engine remove [--purge]` | Removes the service and the binary of an engine account. `--purge` also deletes the account and its home. Run it before you change to `ghafk start`. |
+| `ghafk update` | Installs the newest ghafk from `main`. The next tick uses it. |
 | `ghafk start` | Installs and starts the timer, with the `interval` from the [machine settings](#machine-settings). On Linux, it writes systemd user units. On macOS, it writes a launchd agent. |
 | `ghafk stop` | Stops the timer. A tick that is running finishes first. On macOS, the command waits for that tick. |
 | `ghafk status` | Shows the timer, the recent log, the expiry date of the GitHub token, the GitHub account that ghafk uses, and the state of each repository. |
@@ -51,10 +51,9 @@ On each tick, ghafk works two sets of repositories:
    into `~/.ghafk/clones/<owner>/<name>`. It ignores forks and archived
    repositories.
 
-The second set lets ghafk run as [its own account](separate-user.md) that
-cannot read your clones. Run `ghafk init` in your own clone, then commit
-and push the workflow file. The engine finds the repository on its next
-tick. It needs access to the repository:
+The second set means that you only have to push the workflow file. Run
+`ghafk init` in your own clone, then commit and push the file. ghafk finds
+the repository on its next tick. It needs access to the repository:
 
 - The token of its `gh` login must include the repository. A fine-grained
   token with "All repositories" includes each new repository. It also
@@ -79,6 +78,7 @@ machine. Each setting is one `key: value` line.
 default: <harness> <model>
 progress: step status duration tokens
 interval: 5
+bind: /opt/my-tools
 ```
 
 | Key | Default | Meaning |
@@ -88,6 +88,10 @@ interval: 5
 | `interval` | `2` | The number of minutes between ticks. The value must divide 60, for example 1, 2, 5, 10, 15, 30 or 60. |
 | `repo` | none | A repository, as `owner/name`, that ghafk works although it cannot find it on GitHub, for example a repository of an organization. Write one line for each repository. |
 | `skip` | none | A repository, as `owner/name`, that ghafk must not find on GitHub. Write one line for each repository. It does not affect a path in `~/.ghafk/repos`. |
+| `bind` | none | Directories, space-separated on one line, that each sandbox binds read-only. ghafk also looks in these directories for a program that the checks or a harness line name, and puts them on the `PATH` of the run. Each path must be absolute. ghafk refuses `/`, your home or a directory above it, and directories that hold logins or keys, such as `~/.ssh`, `~/.config/gh` and the login directories of the harnesses. |
+| `egress` | none | Host names, space-separated on one line, that every run may reach through the sandbox proxy, in addition to the built-in list. Use this for a model provider that ghafk does not list. `*.example.com` covers subdomains. IP addresses and `localhost` are rejected. |
+| `local` | none | Port numbers, space-separated on one line, of services on this machine that runs may reach at `localhost:<port>`, for example `local: 11434` for a local model server. Other local ports stay closed. A repository cannot set this. |
+| `env` | none | Environment variable names, space-separated on one line, that runs may receive from your environment. Use this for keys ghafk does not pass by default, for example `NPM_TOKEN`. Harness API keys pass automatically for the built-in harness profiles (claude, codex, pi, opencode, sesh). A custom profile from `~/.ghafk/harnesses` gets no keys and no model hosts by default: list its keys here and its hosts in an `egress:` line. Variables the sandbox sets itself (`HOME`, `PATH`, the proxy and cache variables, GitHub tokens) are rejected. |
 
 > [!IMPORTANT]
 > After you change `interval`, run `ghafk start` again. A change to
@@ -100,8 +104,9 @@ the problem.
 
 Each registered repository has the file `.ghafk/WORKFLOW.md`. On each tick,
 ghafk reads the file from the default branch on GitHub. A change applies
-after you push it. If the clone has no `origin/HEAD`, ghafk reads the file in
-the clone. The file
+after you push it. If ghafk cannot read the file from the default branch, it
+reads the file in the clone and ignores its `egress` and `secrets-allow`
+lines. The file
 starts with a block of `key: value` lines. ghafk adds the text after the
 block to each prompt, after the built-in instructions. Use it for the rules
 of your repository. See [prompts](prompts.md).
@@ -124,7 +129,9 @@ Do not change the public API unless the issue asks for it.
 | `groomer` | `worker` | Writes the contract, or asks you one question. |
 | `judge` | `worker` | Approves or rejects the diff. We recommend a different model from the worker. |
 | `reconciler` | `groomer` | Checks the other open issues again after a merge. |
-| `timeout` | `30` | The number of minutes that each agent run can take. |
+| `timeout` | `30` | The number of minutes that each agent run can take. The maximum is 720. |
+| `secrets-allow` | none | Paths, space-separated on one line, where a value that looks like a key is a test fixture, for example `testdata/`. Each path must be inside the repository. It never covers a value that ghafk passed into the run. See [secrets in the output](security.md#secrets-in-the-output). |
+| `egress` | none | Host names, space-separated on one line, that the sandbox proxy also allows, for example a private module registry or a git host. Each entry must be a host name; `*.example.com` allows subdomains. |
 
 Each value must be on one line. ghafk ignores keys that it does not know.
 
@@ -152,7 +159,10 @@ A profile is a command template and a parser. The template has a
 `{model}` placeholder. The parser reads the final reply of the agent and
 its token usage.
 
-The built-in profiles are `pi`, `omp`, `claude`, `codex`, `sesh` and `opencode`. To
+The built-in profiles are `pi`, `omp`, `claude`, `codex`, `sesh` and `opencode`.
+ghafk refuses to run `omp` inside the sandbox: omp's built-in model client
+ignores the egress proxy. Use `pi` (the same family) instead, or an omp version
+whose client honors `HTTPS_PROXY`. To
 add or change a profile, write one line for each profile in
 `~/.ghafk/harnesses`:
 
@@ -175,19 +185,21 @@ contain `A-Z a-z 0-9 . _ : / @ -`.
 
 ## Files
 
-With `ghafk engine setup`, the engine keeps these files in the home of its
-account: `/var/lib/ghafk` on Linux and `/usr/local/var/ghafk` on macOS.
+These files are in your home. A deprecated engine account keeps them in
+its own home: `/var/lib/ghafk` on Linux and `/usr/local/var/ghafk` on macOS.
 
 | Path | Contents |
 |---|---|
 | `~/.ghafk/repos` | The registered repository paths, one on each line. `#` starts a comment. |
 | `~/.ghafk/clones/` | The clones of the repositories that ghafk found on GitHub. |
 | `~/.ghafk/config` | The [machine settings](#machine-settings). |
-| `~/.ghafk/env` | Optional. `KEY=value` lines, mode `0600`. `GH_TOKEN` is the token for the `gh` calls and pushes of ghafk. It never goes to agents or checks. Other keys, for example the API key of a harness, go to the agents. If the file does not exist, ghafk uses the `gh` login. |
+| `~/.ghafk/env` | Optional. `KEY=value` lines, mode `0600`. `GH_TOKEN` is the token for the `gh` calls and pushes of ghafk. It never goes to agents or checks. Other keys, for example the API key of a harness, go only to the harness that they belong to, or to every run if an `env:` line names them. If the file does not exist, ghafk uses the `gh` login. |
 | `~/.ghafk/harnesses` | Your harness profiles. |
 | `~/.ghafk/prompts/` | Your replacements for the built-in [prompts](prompts.md). |
 | `~/.ghafk/app`, `~/.ghafk/app.pem` | The App ID and private key of an optional [GitHub App](github-app.md). |
 | `~/.ghafk/work/` | The worktrees of runs that are in progress. |
+| `~/.ghafk/cache/` | The per-repository sandbox caches: `go-build`, `go-mod`, npm, the pnpm store and pnpm cache. Delete a directory to start clean. Cargo, pip, uv and `GOPATH` stay in each run's home instead, because they hold writable configuration. |
+| `~/.ghafk/run/` | Scratch directories of sandbox runs: the fresh home of each run. ghafk deletes them after each run, and removes any that a killed tick left behind after a day. The egress proxy socket is in `$XDG_RUNTIME_DIR` or a private temporary directory. |
 | `~/.ghafk/status.json` | The result of the last tick: time, error, token expiry, account, repositories and installed harnesses. ghafk writes it at the end of each tick, also when the tick fails. |
 | `~/.ghafk/tick.log` | The output of the ticks. At 1 MB, ghafk moves it to `tick.log.1` and starts a new file. |
 | `~/.config/systemd/user/ghafk.{service,timer}` | Linux: the units that `ghafk start` writes. To uninstall ghafk, run `ghafk stop` and delete them. |

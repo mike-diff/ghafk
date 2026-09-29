@@ -7,7 +7,7 @@ Description=ghafk tick
 
 [Service]
 Type=oneshot
-TimeoutStartSec=4h
+TimeoutStartSec=infinity
 Environment=PATH=%s
 ExecStart=%s tick
 `

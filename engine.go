@@ -309,7 +309,7 @@ func refuseBesideEngine(verb string) error {
 	if !ok || isEngineAccount(l) {
 		return nil
 	}
-	return fmt.Errorf("an engine runs as the %s account on this machine; `ghafk %s` here would race it. Use `ghafk engine start|stop`, and `ghafk status` to watch it", l.user, verb)
+	return fmt.Errorf("an engine runs as the %s account on this machine; `ghafk %s` here would race it. Run `ghafk engine remove --purge` to move to the sandboxed engine, then `ghafk start`", l.user, verb)
 }
 
 func sanitizeTerminal(s string) string {
@@ -332,6 +332,10 @@ func tailLines(s string, n int) string {
 func runEngine(args []string) error {
 	if len(args) == 0 {
 		usage()
+	}
+	switch args[0] {
+	case "setup", "token", "start", "stop":
+		fmt.Fprintln(os.Stderr, "ghafk: the engine account is deprecated. Agents now run in a sandbox as you: run `ghafk engine remove --purge`, then `ghafk start`.")
 	}
 	switch args[0] {
 	case "setup":

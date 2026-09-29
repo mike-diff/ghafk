@@ -39,6 +39,10 @@ func tick() (err error) {
 	if err != nil {
 		return err
 	}
+	if err := sandboxReady(); err != nil {
+		return err
+	}
+	sweepStaleRuns(home, time.Now())
 	st.Harnesses = installedHarnesses(henv)
 	cfg, err := loadMachineSettings()
 	if err != nil {
@@ -49,6 +53,7 @@ func tick() (err error) {
 	if err != nil {
 		return err
 	}
+	registerOwnerToken(home)
 	if w := tokenWarning(owner, expires, time.Now()); w != "" {
 		fmt.Println(w)
 	}
@@ -65,6 +70,7 @@ func tick() (err error) {
 	for _, t := range targets {
 		var login string
 		engineToken, login = engineIdentity(owner, func() (ghapp.Identity, error) { return mint(t.name) })
+		registerSecret(engineToken)
 		engineMintedAt = time.Now()
 		engineRemint = func() (string, error) {
 			id, err := mint(t.name)
