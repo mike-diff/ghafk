@@ -466,3 +466,36 @@ func TestALocalPortIsReachableOnlyWhenTheConfigNamesIt(t *testing.T) {
 		t.Fatalf("a local: port must reach the service on this machine: %q", out)
 	}
 }
+
+func TestTheSandboxReadsOnlyTheCachedGoToolchains(t *testing.T) {
+	needSandbox(t)
+	t.Setenv("GOMODCACHE", "")
+	t.Setenv("GOPATH", "")
+	home := t.TempDir()
+	download := filepath.Join(home, "go", "pkg", "mod", "cache", "download")
+	toolchains := filepath.Join(download, "golang.org", "toolchain")
+	private := filepath.Join(download, "example.com", "private")
+	for dir, file := range map[string]string{toolchains: "toolchain-ok", private: "private-source"} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "marker"), []byte(file), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	err := runSandboxed(sandboxOpts{
+		name: "checks", dir: t.TempDir(), timeout: 30 * time.Second, home: home,
+		command: fmt.Sprintf(`cat %q; echo; cat %q 2>/dev/null || echo private-hidden; echo "proxy=$GOPROXY"`, filepath.Join(toolchains, "marker"), filepath.Join(private, "marker")),
+	}, &out, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "toolchain-ok") || !strings.Contains(got, "proxy=file://") {
+		t.Fatalf("the cached Go toolchains must be readable through a file proxy, or a repo that needs a newer Go cannot build: %q", got)
+	}
+	if strings.Contains(got, "private-source") || !strings.Contains(got, "private-hidden") {
+		t.Fatalf("only the toolchains may be visible, not other cached modules: %q", got)
+	}
+}

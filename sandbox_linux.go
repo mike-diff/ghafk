@@ -135,6 +135,9 @@ func bwrapArgs(spec sandboxSpec, port int, dir, command string) []string {
 	for _, dir := range spec.extraBinds {
 		args = append(args, "--ro-bind", dir, dir)
 	}
+	if spec.goToolchains != "" {
+		args = append(args, "--ro-bind", spec.goToolchains, spec.goToolchains)
+	}
 	if spec.repoGit != "" {
 		args = append(args, "--ro-bind", spec.repoGit, spec.repoGit)
 	}
