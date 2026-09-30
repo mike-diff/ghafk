@@ -17,6 +17,25 @@ A vague issue gives a question, a wrong change or a park.
 5. **Keep the issue small.** An issue that changes a few files in one area
    is the best size. Divide a large feature into a sequence of issues.
 
+## Decisions to make in the issue
+
+Most questions from the groomer are about decisions that the issue did not
+make. Before you label an issue, check these items:
+
+- **Access.** Who can use the new endpoint, command or page? For example:
+  everyone, clients with a key, or admins only.
+- **Failure.** What does the user get when the change cannot do its work?
+  Give the status code, the error message or the exit code.
+- **Scope.** Which parts does the change apply to? Name the routes,
+  commands or screens, and name the parts that do not change.
+- **Limits.** Give the default values of new limits and say if they can
+  be changed in the configuration.
+- **Earlier features.** Say if an earlier feature applies to the new
+  part. For example, a new endpoint can need the API keys of an earlier
+  issue.
+
+A question costs a round trip. An answer in the issue does not.
+
 ## Example
 
 A good issue:
