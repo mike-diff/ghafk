@@ -18,6 +18,7 @@ func TestParseCommand(t *testing.T) {
 		{"/close", "close", ""},
 		{"/stop", "stop", ""},
 		{"/start", "start", ""},
+		{"/help", "help", ""},
 		{"start this", "", ""},
 		{"  /stop  ", "stop", ""},
 		{"/retrying", "", ""},
@@ -135,6 +136,39 @@ func TestARetryOlderThanTheLatestParkIsIgnored(t *testing.T) {
 	steerIssue("repo", "demo", "ghafk", workflow{label: "agent"}, target)
 	if called(*calls, "issue edit 4 --add-label agent") {
 		t.Fatalf("a /retry from before the latest park requeued the issue, so it can loop every tick: %v", *calls)
+	}
+}
+
+func TestHelpRepliesWithCommandsAndLabels(t *testing.T) {
+	stubWriters(t)
+	var posted string
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "issue comment 12 ") {
+			posted = cmd
+		}
+		return "", nil
+	})
+	target := &commandTarget{number: 12, comments: []prComment{
+		{Body: "/help", Author: author{Login: "owner"}, Association: "OWNER", URL: "https://github.com/o/r/issues/12#issuecomment-7"},
+	}}
+	if steerIssue("repo", "demo", "ghafk", workflow{label: "work"}, target) {
+		t.Fatal("a /help command must not hold the issue")
+	}
+	if posted == "" {
+		t.Fatalf("no reply comment was posted for /help: %v", *calls)
+	}
+	for _, want := range []string{"`/start`", "`/answer <text>`", "`/retry`", "`/close`", "`/stop`", "`work`", "`needs-human`"} {
+		if !strings.Contains(posted, want) {
+			t.Errorf("the /help reply lacks %s: %s", want, posted)
+		}
+	}
+	for _, banned := range []string{"issue edit", "issue close"} {
+		if called(*calls, banned) {
+			t.Errorf("/help must not change labels or close the issue: %v", *calls)
+		}
+	}
+	if !called(*calls, "api -X POST repos/{owner}/{repo}/issues/comments/7/reactions") {
+		t.Errorf("/help must get a reaction on the command comment: %v", *calls)
 	}
 }
 

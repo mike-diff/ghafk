@@ -100,6 +100,9 @@ func steerIssue(repo, base, login string, wf workflow, t *commandTarget) bool {
 		if err == nil {
 			openCard(repo, is, login).approve(issueDigest(is))
 		}
+	case verb == "help":
+		stepf(base, t.number, "command help")
+		err = postComment(repo, n, helpComment(t.number, wf.label), t.comments, login)
 	case verb == "close":
 		stepf(base, t.number, "command close")
 		_, err = gh(repo, "issue", "close", n, "--reason", "completed")
@@ -115,6 +118,22 @@ func steerIssue(repo, base, login string, wf workflow, t *commandTarget) bool {
 	}
 	ackCommand(repo, c)
 	return verb == "stop" || verb == "close"
+}
+
+func helpComment(number int, label string) commentSpec {
+	lines := []string{
+		"Put a command at the start of a comment on the issue or its pull request.",
+		"",
+		"- `/start`: Starts work on the issue.",
+		"- `/answer <text>`: Answers a question from ghafk. Grooming continues.",
+		"- `/retry`: Continues a parked issue or pull request.",
+		"- `/close`: Closes the issue, or closes the pull request.",
+		"- `/stop`: Removes the labels. ghafk ignores the issue until you label it again.",
+		"",
+		"- `" + label + "` on the issue: Starts work on the issue.",
+		"- `needs-human` on the issue: Marks a parked issue that waits for you.",
+	}
+	return commentSpec{kind: "help", role: "engine", number: number, sentence: "Commands and labels for this repository:", body: strings.Join(lines, "\n")}
 }
 
 func steerPR(repo, base, login string, wf workflow, p pr, num int, prior []prComment) {
@@ -180,7 +199,7 @@ func parseCommand(body string) (string, string) {
 			return "", ""
 		}
 		return "answer", text
-	case "/retry", "/close", "/stop", "/start":
+	case "/retry", "/close", "/stop", "/start", "/help":
 		return verb[1:], ""
 	}
 	return "", ""
