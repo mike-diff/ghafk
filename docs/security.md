@@ -27,6 +27,14 @@ sandbox that ends with the run:
   shim, the version manager's folder (for example `~/.pyenv`) is
   readable too, because the shim runs the manager. System directories
   are read-only.
+  For a managed Pi installation, ghafk validates the install marker,
+  version, package entrypoint and dependency tree before each run. It
+  exposes only the selected release's `node_modules` read-only, not the
+  launcher, installer metadata or the surrounding `~/.pi` tree. Links
+  outside that runtime and hard-linked files are refused. The release
+  path is fixed for the run, so `pi update` affects later runs only.
+  The installer and installed package code must still be trusted, as
+  with any harness; these checks do not verify package authenticity.
   The Go toolchains in your module download cache
   (`golang.org/toolchain`) are readable too, so a repository that needs
   a newer Go builds without a download; other cached modules stay

@@ -63,6 +63,8 @@ type sandboxSpec struct {
 	ghafkBin      string
 	path          string
 	profile       string
+	command       string
+	piRuntime     string
 }
 
 var sandboxLogins = map[string][]string{
@@ -188,7 +190,7 @@ func runSandboxed(o sandboxOpts, stdout, stderr io.Writer) error {
 	if err := probeHarnessProgram(o, spec, proxy); err != nil {
 		return setupFailed("%s: %w", o.name, err)
 	}
-	err = sandboxLaunch(o, spec, proxy, sandboxCommand(o.command, spec.profile), stdout, stderr)
+	err = sandboxLaunch(o, spec, proxy, spec.command, stdout, stderr)
 	if denied := proxy.denials(); err == nil && len(denied) > 0 {
 		fmt.Fprintf(stderr, "ghafk: %s: the sandbox proxy denied: %s\n", o.name, strings.Join(denied, ", "))
 	}
@@ -414,6 +416,7 @@ func buildSandbox(o sandboxOpts) (sandboxSpec, error) {
 	if o.role != nil {
 		spec.profile = o.role.Profile
 	}
+	spec.command = sandboxCommand(o.command, spec.profile)
 	home := o.home
 	if home == "" {
 		var err error
@@ -514,6 +517,22 @@ func buildSandbox(o sandboxOpts) (sandboxSpec, error) {
 		if tree := workedTree(evalPath(path), home, o); tree != "" {
 			return spec, fmt.Errorf("the program %q is inside %s, which ghafk works on, so that repository could decide what runs outside the sandbox. Name a program installed on your PATH instead", w, tree)
 		}
+		if spec.profile == "pi" {
+			managed, err := managedPIProgram(path, home)
+			if err != nil {
+				return spec, err
+			}
+			if managed.program != "" {
+				if firstWord(spec.command) != w {
+					return spec, fmt.Errorf("the managed Pi command must start with its harness executable")
+				}
+				command := strings.TrimSpace(spec.command)
+				spec.command = strconv.Quote(managed.node) + " " + strconv.Quote(managed.program) + command[len(strings.Fields(command)[0]):]
+				spec.piRuntime = managed.modules
+				spec.programs = append(spec.programs, managed.node, managed.program)
+				continue
+			}
+		}
 		spec.programs = append(spec.programs, path)
 	}
 	if len(missing) > 0 {
@@ -524,8 +543,16 @@ func buildSandbox(o sandboxOpts) (sandboxSpec, error) {
 		return spec, fmt.Errorf("%s %s, which is not on PATH. Install it, or bind the directory it lives in with a `bind:` line in ~/.ghafk/config; do not bind your whole home or ~/.local/share", what, quoteList(missing))
 	}
 	for _, bin := range spec.programs {
-		for _, dir := range programBindDirs(bin) {
-			if reason := exposesSecrets(dir, home); reason != "" {
+		if tree := workedTree(evalPath(bin), home, o); tree != "" {
+			return spec, fmt.Errorf("the program %q is inside %s, which ghafk works on. Install it outside that repository", bin, tree)
+		}
+		dirs := []string{spec.piRuntime}
+		if spec.piRuntime == "" || !underTree(evalPath(bin), spec.piRuntime) {
+			dirs = programBindDirs(bin)
+		}
+		for _, dir := range dirs {
+			piCode := spec.piRuntime != "" && underTree(dir, spec.piRuntime) && underTree(evalPath(dir), spec.piRuntime)
+			if reason := exposesSecrets(dir, home); reason != "" && !piCode {
 				return spec, fmt.Errorf("the program %s needs the directory %s, which %s. Install the program in a directory of its own", bin, dir, reason)
 			}
 			spec.programDirs = append(spec.programDirs, dir)
