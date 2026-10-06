@@ -183,6 +183,48 @@ A `name.allow:` line sets the models that a `model:` label can select for
 that profile. A model name must start with a letter or a digit. It can
 contain `A-Z a-z 0-9 . _ : / @ -`.
 
+### Managed Pi installations
+
+The `pi` profile supports Pi's managed installer layout under
+`~/.pi/agent/`. A launcher reached through `~/.local/bin/pi` works too.
+You do not need a second Pi installation for ghafk.
+
+Before each run, ghafk reads the managed-install marker and
+`install/current-version`. It checks the selected release and runs its
+package entrypoint directly, without executing the launcher. Only that
+release's `node_modules` tree is readable, and it is read-only. The rest
+of `~/.pi` stays hidden; Pi's login and provider configuration are copied
+into the disposable home separately. See [security](security.md).
+
+Run `pi update` as usual. The next agent run uses the newly selected
+release. A run already prepared uses its original release. ghafk does not
+install packages or maintain a second copy. As with Pi's launcher, ghafk
+prefers Pi's managed Node.js under `$XDG_DATA_HOME/pi-node/current/bin`
+(by default, `~/.local/share/pi-node/current/bin`). Otherwise, it uses
+`node` from the timer's `PATH`.
+
+To verify the profile, replace `provider/model` with the model you use:
+
+```sh
+pi --version
+ghafk harness list
+ghafk harness test pi 'provider/model'
+```
+
+The harness test makes model requests and can incur charges. If it passes,
+reply `/retry` on a parked issue. If you changed the timer's `PATH`, run
+`ghafk start` again.
+
+If you previously installed a separate Pi copy for ghafk, remove only its
+`pi:` override from `~/.ghafk/harnesses`. Keep other profiles and any
+`pi.allow:` line. The built-in profile then selects `pi` from `PATH`.
+
+An invalid or unsupported managed layout parks with the reason. Repair the
+installation, or use a code-only installation outside the protected tree
+and override the `pi` profile with its absolute executable path. Keep the
+name `pi` and parser `pi-json` to retain Pi's login and model-host rules.
+Do not bind `~/.pi` or remove it from the protected directories.
+
 ## Files
 
 These files are in your home. A deprecated engine account keeps them in
