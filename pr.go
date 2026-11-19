@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -156,8 +155,11 @@ func (r *prRun) checkout() error {
 
 func (r *prRun) check() (bool, error) {
 	if _, err := run(r.work, "git", "rebase", "origin/"+r.def); err != nil {
-		_, err := run(r.work, "git", "rebase", "--abort")
-		return false, err
+		if _, err := run(r.work, "git", "rebase", "--abort"); err != nil {
+			return false, err
+		}
+		spec := commentSpec{kind: "park", role: "checks", number: r.n, sentence: "The branch conflicts with `" + r.def + "`.", body: "ghafk cannot rebase `" + r.branch + "` onto `" + r.def + "`, and the worker cannot resolve a conflict. Resolve the conflict on the branch. Then comment `/retry`.", footer: retryFooter()}
+		return true, park(r.at, "branch conflicts with "+r.def, spec)
 	}
 	var err error
 	if r.after, err = run(r.work, "git", "rev-parse", "HEAD"); err != nil {
@@ -168,7 +170,7 @@ func (r *prRun) check() (bool, error) {
 		r.st.Checks, r.st.ChecksSha = "pass", r.after
 		r.card.finish("done", 0)
 	} else {
-		var buf bytes.Buffer
+		var buf tailBuffer
 		r.checkErr = runSandboxed(sandboxOpts{name: "checks", dir: r.work, command: r.wf.checks, timeout: checkTimeout, egress: r.wf.egress, repo: r.repo, home: r.home}, &buf, &buf)
 		var setup sandboxSetupError
 		if errors.As(r.checkErr, &setup) {
@@ -203,16 +205,15 @@ func (r *prRun) judge() (bool, error) {
 	}
 	r.card.begin("Judge", r.wf.judge.Label)
 	verdict, tokens, err := runJudge(r.base, r.n, r.work, r.wf.judge, r.wf.body, judgeContract(r.is, r.login), r.def, r.wf.timeout, r.wf.egress, r.repo, r.home)
+	if errors.Is(err, errDiffTooLarge) {
+		spec := commentSpec{kind: "park", role: "judge", number: r.n, sentence: "The diff has " + strconv.Itoa(diffLineCap) + " or more lines, so the judge cannot read all of it.", body: "Review the pull request yourself.", footer: closeFooter()}
+		return true, park(r.at, "diff too large for the judge", spec)
+	}
 	if err != nil {
 		return true, parkOnError(r.at, "judge", "The judge failed to run.", err)
 	}
-	kind := ""
-	switch {
-	case strings.HasPrefix(verdict, "approve:"):
-		kind = "approve"
-	case strings.HasPrefix(verdict, "reject:"):
-		kind = "reject"
-	default:
+	kind := verdictKind(verdict)
+	if kind == "" {
 		r.st.Repairs = 0
 		if err := r.putBody(""); err != nil {
 			return false, err
@@ -260,9 +261,17 @@ func (r *prRun) merge() error {
 		spec := commentSpec{kind: "park", role: "merge", number: r.n, sentence: "The branch holds a value that looks like a secret. ghafk did not merge it.", body: secretParkBody(hits, false), footer: retryFooter()}
 		return park(r.at, "secret in the branch", spec)
 	}
+	var view issueView
+	if err := ghJSON(r.repo, []string{"issue", "view", r.issueNum, "--json", "number,author,title,body,comments,state,labels"}, &view); err != nil {
+		return err
+	}
+	if !issueOpen(view.State) || !issueLabeled(view.Labels, r.wf.label) {
+		stepf(r.base, r.n, "issue closed or unlabeled; merge skipped")
+		return nil
+	}
 	markScanned(r.work)
 	if _, err := run(r.work, "git", "push", r.lease, "origin", r.after+":refs/heads/"+r.branch); err != nil {
-		return err
+		return parkOnError(r.at, "merge", "The push before the merge was rejected.", err)
 	}
 	worktreeRemove(r.repo, r.work)
 	if merged, err := mergeOrPark(r.at, r.prNum, commitSubject(contractText(r.is.Comments, r.login), r.is.Title), r.after); !merged || err != nil {
@@ -301,8 +310,7 @@ func (r *prRun) repair() (bool, error) {
 	prompt := joinParts(workerPrompt(r.wf), r.wf.body, contractText(r.is.Comments, r.login),
 		"# Repair: PR #"+r.prNum+" for issue #"+r.issueNum+" failed checks",
 		r.tail,
-		"# Issue #"+r.issueNum+": "+r.is.Title,
-		strings.TrimSpace(r.is.Body))
+		issueText(r.is))
 	answer, tokens, err := runWorker(r.base, r.n, r.work, worker, prompt, r.wf.timeout, r.wf.egress, r.repo, r.home)
 	if err != nil {
 		sentence, body := runFailure("worker", err, r.wf.timeout)

@@ -199,14 +199,57 @@ func TestNeutralizeCoversURLClosingRefsAndLoneBackticks(t *testing.T) {
 	if got := neutralize("Fixes https://github.com/o/r/issues/7"); got != "Fixes `https://github.com/o/r/issues/7`" {
 		t.Errorf("a closing keyword with an issue URL stayed live: %q", got)
 	}
-	if got := neutralize("see `@octocat for details"); !strings.Contains(got, "`@octocat`") {
+	if got := neutralize("see `@octocat for details"); strings.Contains(got, "@octocat") {
 		t.Errorf("a lone backtick kept @octocat outside a code span: %q", got)
+	}
+	if got := neutralize("run `foo @victim bar` ok"); got != "run `foo @victim bar` ok" {
+		t.Errorf("a mention inside a code span was moved out of it: %q", got)
+	}
+	if got := neutralize("x `@victim now` y"); got != "x `@victim now` y" {
+		t.Errorf("a mention at the start of a code span was moved out of it: %q", got)
+	}
+	if got := neutralize("```\n@victim\n```"); got != "```\n@victim\n```" {
+		t.Errorf("a mention inside a fenced block was changed: %q", got)
+	}
+	if got := neutralize(neutralize("see ![x](https://e.example/?d=1) and <IMG src=https://e.example>")); strings.Contains(got, "![") || strings.Contains(strings.ToLower(got), "<img") {
+		t.Errorf("an image stayed live, so viewing the comment sends data to its host: %q", got)
 	}
 	if got := neutralize(neutralize("hi @octocat")); got != "hi `@octocat`" {
 		t.Errorf("neutralize is not stable when applied twice: %q", got)
 	}
 	if got := neutralize("mail a@octocat.com"); got != "mail a@octocat.com" {
 		t.Errorf("an email address was changed: %q", got)
+	}
+}
+
+func TestIssueTextDropsWhatGitHubHides(t *testing.T) {
+	zw := string(rune(0x200b))
+	got := issueText(issue{Number: 3, Title: "add" + zw + " x", Body: "shown <!-- hidden one -->\n[ref]: https://e.example \"hidden two\"\nalso shown <!-- hidden three"})
+	for _, hidden := range []string{"hidden one", "hidden two", "hidden three", zw} {
+		if strings.Contains(got, hidden) {
+			t.Errorf("the prompt keeps %q, which the maintainer who approved the issue could not see: %q", hidden, got)
+		}
+	}
+	if !strings.Contains(got, "# Issue #3: add x") || !strings.Contains(got, "also shown") {
+		t.Errorf("visible text was lost: %q", got)
+	}
+}
+
+func TestErrorLinePrefersTheRejection(t *testing.T) {
+	if got := errorLine("To https://github.com/o/r\n ! [rejected] agent/5 -> agent/5 (fetch first)\nerror: failed to push\n"); got != "! [rejected] agent/5 -> agent/5 (fetch first)" {
+		t.Fatalf("errorLine = %q; the park comment would not say why the push failed", got)
+	}
+}
+
+func TestTailBufferKeepsTheEnd(t *testing.T) {
+	var b tailBuffer
+	chunk := make([]byte, 1<<20)
+	for i := 0; i < 3*outputCap>>20; i++ {
+		b.Write(chunk)
+	}
+	b.Write([]byte("last line"))
+	if len(b.buf) > 2*outputCap || !strings.HasSuffix(b.String(), "last line") {
+		t.Fatalf("buffer holds %d bytes; it must stay bounded and keep the end", len(b.buf))
 	}
 }
 

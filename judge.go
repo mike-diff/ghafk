@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"os"
 	"sort"
 	"strconv"
@@ -17,7 +17,7 @@ func judgeContract(is issue, login string) string {
 	if text := contractText(is.Comments, login); text != "" {
 		return text
 	}
-	return "# Issue #" + strconv.Itoa(is.Number) + ": " + is.Title + "\n\n" + strings.TrimSpace(is.Body)
+	return issueText(is)
 }
 
 func parseItems(answer string) map[int]cardItem {
@@ -52,8 +52,11 @@ func runJudge(base string, n int, work string, jr harness.Role, body, contract, 
 	if err != nil {
 		return "", 0, err
 	}
-	prompt := joinParts(rolePrompt("judge"), body, contract, "# Diff\n"+capDiff(diff))
-	var out bytes.Buffer
+	if strings.Count(diff, "\n") >= diffLineCap {
+		return "", 0, errDiffTooLarge
+	}
+	prompt := joinParts(rolePrompt("judge"), body, contract, "# Diff\n\n"+fenced(diff))
+	var out tailBuffer
 	if err := runSandboxed(sandboxOpts{name: "judge", dir: work, command: jr.Command, stdin: prompt, timeout: timeout, role: &jr, egress: egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		return "", 0, err
 	}
@@ -64,7 +67,42 @@ func runJudge(base string, n int, work string, jr harness.Role, body, contract, 
 	if _, err := run(work, "git", "clean", "-fdq"); err != nil {
 		return "", 0, err
 	}
-	return answerFrom(answer, "approve:", "reject:"), tokens, nil
+	return judgeVerdict(answer), tokens, nil
+}
+
+var errDiffTooLarge = errors.New("diff too large for the judge")
+
+func capDiff(diff string) string {
+	lines := strings.Split(diff, "\n")
+	if len(lines) > diffLineCap {
+		lines = append(lines[:diffLineCap], "[diff truncated]")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func judgeVerdict(answer string) string {
+	answer = strings.TrimSpace(answer)
+	first, _, _ := strings.Cut(answer, "\n")
+	first = strings.Trim(first, "`*# \t")
+	if !strings.HasPrefix(first, "approve:") && !strings.HasPrefix(first, "reject:") {
+		return answer
+	}
+	return answerFrom(answer, "approve:", "reject:")
+}
+
+func verdictKind(verdict string) string {
+	switch {
+	case strings.HasPrefix(verdict, "reject:"):
+		return "reject"
+	case strings.HasPrefix(verdict, "approve:"):
+		for _, it := range parseItems(verdict) {
+			if it.Status == "fail" {
+				return "reject"
+			}
+		}
+		return "approve"
+	}
+	return ""
 }
 
 func verdictHead(kind, sha string) string {
@@ -106,12 +144,4 @@ func verdictCommand(prNum, prAuthor, login, kind, body string) []string {
 func postVerdict(repo, prNum, prAuthor, login, kind, body string) error {
 	_, err := gh(repo, verdictCommand(prNum, prAuthor, login, kind, body)...)
 	return err
-}
-
-func capDiff(diff string) string {
-	lines := strings.Split(diff, "\n")
-	if len(lines) > diffLineCap {
-		lines = append(lines[:diffLineCap], "[diff truncated]")
-	}
-	return strings.Join(lines, "\n")
 }

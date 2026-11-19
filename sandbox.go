@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"debug/macho"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -256,14 +257,14 @@ func loginSyncBack(spec sandboxSpec, root *os.Root) {
 		if !ok || bytes.Equal(data, seed.orig) {
 			continue
 		}
-		if v, err := decodeLoginJSON(data); err == nil {
+		merged, ok := mergeLoginRefresh(seed.orig, data)
+		if !ok || bytes.Equal(merged, seed.orig) {
+			continue
+		}
+		if v, err := decodeLoginJSON(merged); err == nil {
 			registerTokenFields(v, "")
 		}
 		if now, err := os.ReadFile(seed.real); err != nil || !bytes.Equal(now, seed.orig) {
-			continue
-		}
-		merged, ok := mergeLoginRefresh(seed.orig, data)
-		if !ok || bytes.Equal(merged, seed.orig) {
 			continue
 		}
 		writeLoginFile(seed.real, merged)
@@ -377,7 +378,7 @@ func mergeTokenFields(before, after any, key string) any {
 				return v
 			}
 		case string:
-			if _, isStr := before.(string); isStr && safeTokenValue(v) {
+			if old, isStr := before.(string); isStr && safeTokenValue(v) && sameTokenSubject(old, v) {
 				return v
 			}
 		}
@@ -385,6 +386,33 @@ func mergeTokenFields(before, after any, key string) any {
 	default:
 		return before
 	}
+}
+
+func sameTokenSubject(before, after string) bool {
+	old, ok := jwtSubject(before)
+	if !ok {
+		return true
+	}
+	now, ok := jwtSubject(after)
+	return ok && now == old
+}
+
+func jwtSubject(token string) (string, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return "", false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", false
+	}
+	var claims struct {
+		Sub string `json:"sub"`
+	}
+	if json.Unmarshal(payload, &claims) != nil || claims.Sub == "" {
+		return "", false
+	}
+	return claims.Sub, true
 }
 
 func safeTokenValue(v string) bool {

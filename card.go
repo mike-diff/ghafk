@@ -285,7 +285,7 @@ func renderAlert(st cardState, loc *time.Location) string {
 		if checks := manualChecks(st); len(checks) > 0 {
 			lines = append(lines, "> Check by hand:")
 			for _, text := range checks {
-				lines = append(lines, "> - "+text)
+				lines = append(lines, "> - "+neutralize(text))
 			}
 		}
 	case "working":

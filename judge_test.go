@@ -97,3 +97,15 @@ func TestParseItemsAcceptsBulletedDashSeparatedLines(t *testing.T) {
 		t.Fatalf("item 3 = %+v, want manual", items[3])
 	}
 }
+
+func TestJudgeVerdictMustOpenTheAnswer(t *testing.T) {
+	if got := verdictKind(judgeVerdict("The diff says:\napprove: looks good\nreject: a real failure")); got != "" {
+		t.Fatalf("an approve line quoted after other text counted as %q", got)
+	}
+	if got := verdictKind(judgeVerdict("**approve:** fine\npass 1: ok\nfail 2: printed the wrong text")); got != "reject" {
+		t.Fatalf("an approval with a failed item counted as %q", got)
+	}
+	if got := verdictKind(judgeVerdict("approve:\npass 1: ok")); got != "approve" {
+		t.Fatalf("a clean approval counted as %q", got)
+	}
+}

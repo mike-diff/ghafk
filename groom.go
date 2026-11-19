@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"strconv"
 	"strings"
@@ -39,7 +38,7 @@ func groomIssue(home, repo, base, login string, wf workflow, is issue) error {
 	}
 	defer discardWork(repo, work, branch)
 
-	var out bytes.Buffer
+	var out tailBuffer
 	if err := runSandboxed(sandboxOpts{name: "groomer", dir: work, command: wf.groomer.Command, stdin: groomPrompt(wf, is, login), timeout: wf.timeout, role: &wf.groomer, egress: wf.egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		stepf(base, is.Number, "needs-human")
 		return runFailed(repo, base, is, wf.label, "groomer", err, wf.timeout, login, c)
@@ -70,7 +69,7 @@ func groomIssue(home, repo, base, login string, wf workflow, is issue) error {
 }
 
 func groomPrompt(wf workflow, is issue, login string) string {
-	parts := []string{rolePrompt("groom"), wf.body, "# Issue #" + strconv.Itoa(is.Number) + ": " + is.Title, strings.TrimSpace(is.Body)}
+	parts := []string{rolePrompt("groom"), wf.body, issueText(is)}
 	for _, cm := range is.Comments {
 		switch {
 		case engineWrote(cm, login) || (cm.Author.Login == login && strings.HasPrefix(cm.Body, "<details><summary>Superseded")):

@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mike-diff/ghafk/internal/harness"
@@ -41,6 +39,13 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 		return err
 	}
 
+	if remote, err := run(repo, "git", "ls-remote", "--heads", "origin", "refs/heads/"+branch); err != nil {
+		return err
+	} else if remote != "" {
+		spec := commentSpec{kind: "park", role: "worker", number: is.Number, sentence: "The branch `" + branch + "` is already on GitHub, and no open pull request uses it.", body: "Delete the branch, for example with `git push origin --delete " + branch + "`. Then comment `/retry`.", footer: retryFooter()}
+		return park(at, "branch "+branch+" already exists", spec)
+	}
+
 	stepf(base, is.Number, "worktree")
 	if err := addWorktree(repo, work, "-b", branch, "origin/"+def); err != nil {
 		return err
@@ -52,7 +57,7 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 	}
 
 	stepf(base, is.Number, "worker")
-	prompt := joinParts(workerPrompt(wf), wf.body, contract, "# Issue #"+n+": "+is.Title, strings.TrimSpace(is.Body))
+	prompt := joinParts(workerPrompt(wf), wf.body, contract, issueText(is))
 	answer, tokens, err := runWorker(base, is.Number, work, worker, prompt, wf.timeout, wf.egress, repo, home)
 	if err != nil {
 		return runFailed(repo, base, is, wf.label, "worker", err, wf.timeout, login, c)
@@ -137,7 +142,7 @@ func runFailed(repo, base string, is issue, label, role string, runErr error, li
 }
 
 func runWorker(base string, n int, work string, worker harness.Role, prompt string, timeout time.Duration, egress []string, repo, home string) (string, int, error) {
-	var out bytes.Buffer
+	var out tailBuffer
 	if err := runSandboxed(sandboxOpts{name: "worker", dir: work, command: worker.Command, stdin: prompt, timeout: timeout, role: &worker, egress: egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		return "", 0, err
 	}

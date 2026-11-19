@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"sort"
 	"strconv"
@@ -72,7 +71,7 @@ func reconcileIssue(home, repo, base, login string, wf workflow, contract, befor
 		return err
 	}
 	prompt := joinParts(rolePrompt("reconcile"), wf.body, contract, "# Landed\n"+capDiff(diff))
-	var out bytes.Buffer
+	var out tailBuffer
 	if err := runSandboxed(sandboxOpts{name: "reconciler", dir: work, command: wf.reconciler.Command, stdin: prompt, timeout: wf.timeout, role: &wf.reconciler, egress: wf.egress, repo: repo, home: home}, &out, os.Stderr); err != nil {
 		return err
 	}

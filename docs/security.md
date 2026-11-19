@@ -176,6 +176,9 @@ A person who can put text in front of an agent can try to give it
 instructions. ghafk applies these limits:
 
 - Only comments from people with write access go to the agents.
+- Agents see only the text that GitHub shows. ghafk removes HTML
+  comments, link definitions and invisible characters from the title and
+  description before an agent reads them.
 - An issue from a person without write access waits for `/start` from a
   maintainer. If its title or description changes after `/start`, the
   issue parks. It then needs a new `/start`.
@@ -224,8 +227,16 @@ Your repository hooks do not run for the commits and pushes of ghafk.
 - **Checks run the code of the pull request** on your machine. This
   includes install scripts.
 - **Model output is public.** Park comments and pull request descriptions
-  include agent output. ghafk disables mentions, closing keywords and
-  hidden markers in that output. See [secrets in the output](#secrets-in-the-output).
+  include agent output. ghafk disables mentions, closing keywords,
+  images and hidden markers in that output. See [secrets in the output](#secrets-in-the-output).
+- **Your CI runs the agent's code.** ghafk pushes `agent/<N>` before
+  the judge reads it. Your existing `push` and `pull_request` workflows
+  then run the pushed tests and scripts with the secrets of the
+  repository. Keep secrets in an
+  [environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment)
+  that needs a reviewer, or skip secret jobs on `agent/` branches.
+- **The judge reads at most 4000 lines of diff.** A longer diff parks,
+  and you review the pull request yourself.
 - **There is no spending limit.** Each issue costs some agent runs. A
   failure parks the issue and does not retry, so nothing loops. Monitor
   your usage.

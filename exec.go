@@ -66,7 +66,7 @@ func worktreeRemove(repo, work string) {
 	delete(worktreeGitDirs, work)
 	delete(worktreePointers, work)
 	if _, err := run(repo, "git", "worktree", "remove", "--force", work); err != nil {
-		os.RemoveAll(work)
+		removeTree(work)
 	}
 }
 
@@ -119,11 +119,43 @@ func runExact(dir, name string, env []string, args ...string) (string, error) {
 	out := stdout.String()
 	if err != nil {
 		err = fmt.Errorf("%s %s: %w", name, clipArgs(args), err)
-		if detail := firstLine(stderr.String()); detail != "" {
+		if detail := errorLine(stderr.String()); detail != "" {
 			err = fmt.Errorf("%w: %s", err, detail)
 		}
 	}
 	return out, err
+}
+
+func errorLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if t := strings.TrimSpace(line); strings.HasPrefix(t, "fatal:") || strings.HasPrefix(t, "error:") || strings.HasPrefix(t, "! [") {
+			return t
+		}
+	}
+	return firstLine(s)
+}
+
+const outputCap = 8 << 20
+
+type tailBuffer struct {
+	buf []byte
+	cut bool
+}
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > 2*outputCap {
+		t.buf = append([]byte(nil), t.buf[len(t.buf)-outputCap:]...)
+		t.cut = true
+	}
+	return len(p), nil
+}
+
+func (t *tailBuffer) String() string {
+	if t.cut {
+		return "[ghafk kept only the last 8 MiB of output]\n" + string(t.buf)
+	}
+	return string(t.buf)
 }
 
 func firstLine(s string) string {

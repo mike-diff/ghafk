@@ -152,6 +152,13 @@ func TestRejectedPushParks(t *testing.T) {
 	if !called(calls, "issue edit 5 --add-label needs-human --remove-label agent") {
 		t.Fatalf("a rejected push was not parked, so the worker reruns every tick: %v", calls)
 	}
+	body := ""
+	for _, c := range calls {
+		body += c.String()
+	}
+	if !strings.Contains(body, "git push origin --delete agent/5") {
+		t.Fatalf("a left-over remote branch was not named before the worker ran, so every /retry pays for a worker and fails: %v", calls)
+	}
 }
 
 func TestAWorkerThatBreaksItsWorktreeParks(t *testing.T) {

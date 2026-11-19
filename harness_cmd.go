@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -195,7 +194,7 @@ func harnessTest(profile, model string) error {
 	if err := os.WriteFile(filepath.Join(work, "note.txt"), []byte("before\n"), 0o644); err != nil {
 		return err
 	}
-	var out bytes.Buffer
+	var out tailBuffer
 	runErr := runSandboxed(sandboxOpts{name: "worker", dir: work, command: r.Command, stdin: harnessTestPrompt, timeout: harnessTestTimeout, role: &r}, &out, os.Stderr)
 
 	results := make([]harnessResult, 0, 6)

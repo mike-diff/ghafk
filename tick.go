@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mike-diff/ghafk/internal/ghapp"
@@ -17,6 +19,15 @@ func tick() (err error) {
 	if err != nil {
 		return err
 	}
+	unlock, err := lockTick(home)
+	if errors.Is(err, errTickRunning) {
+		fmt.Println("ghafk: another tick is running; this one stops")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	if stop, logErr := startTickLog(home); logErr == nil {
 		defer stop()
 	} else {
@@ -86,6 +97,27 @@ func tick() (err error) {
 		st.Repos = append(st.Repos, repoStatus{Name: t.name, State: state})
 	}
 	return nil
+}
+
+var errTickRunning = errors.New("another tick is running")
+
+func lockTick(home string) (func(), error) {
+	path := filepath.Join(home, ".ghafk", "tick.lock")
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, errTickRunning
+		}
+		return nil, err
+	}
+	return func() { f.Close() }, nil
 }
 
 func readRepos(path string) ([]string, error) {
@@ -179,7 +211,7 @@ func parkTooManyComments(repo, base, login, label string, is issue) error {
 
 func parkForApproval(repo, base, login, label string, is issue) error {
 	stepf(base, is.Number, "needs approval")
-	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: "Someone without write access opened this issue.", body: "A maintainer must read the title and description, then comment `/start`. ghafk works only that exact text. If the text changes later, ghafk stops and needs a new `/start`.", footer: approvalFooter()}
+	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: "Someone without write access opened this issue.", body: "A maintainer must read the title and description, then comment `/start`. ghafk works only that exact text. Agents do not see HTML comments, link definitions or invisible characters. If the text changes later, ghafk stops and needs a new `/start`.", footer: approvalFooter()}
 	return park(parkPlace{repo: repo, base: base, login: login, label: label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments}, "approval needed", spec)
 }
 

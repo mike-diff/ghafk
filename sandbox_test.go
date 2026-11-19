@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -1446,5 +1448,18 @@ func TestAVersionManagerShimBindsItsRoot(t *testing.T) {
 	os.WriteFile(liar, []byte("#!/usr/bin/env bash\nexport PYENV_ROOT=\""+root+"\"\n"), 0o755)
 	if dirs := programBindShallow(liar); slices.Contains(dirs, root) || slices.Contains(dirs, other) {
 		t.Fatalf("a shim naming another root must bind neither: %v", dirs)
+	}
+}
+
+func TestLoginCopyBackKeepsTheAccount(t *testing.T) {
+	jwt := func(sub string) string {
+		return "eyJhbGciOiJub25lIn0." + base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"`+sub+`"}`)) + ".sig"
+	}
+	orig := []byte(`{"access_token":"` + jwt("me") + `"}`)
+	if merged, ok := mergeLoginRefresh(orig, []byte(`{"access_token":"`+jwt("attacker")+`"}`)); !ok || !bytes.Equal(merged, orig) {
+		t.Fatalf("a token for another account replaced the host login: %s", merged)
+	}
+	if merged, ok := mergeLoginRefresh(orig, []byte(`{"access_token":"`+jwt("me")+`x"}`)); !ok || bytes.Equal(merged, orig) {
+		t.Fatalf("a refreshed token for the same account was dropped: %s", merged)
 	}
 }

@@ -243,7 +243,7 @@ its own home: `/var/lib/ghafk` on Linux and `/usr/local/var/ghafk` on macOS.
 | `~/.ghafk/cache/` | The per-repository sandbox caches: `go-build`, `go-mod`, npm, the pnpm store and pnpm cache. Delete a directory to start clean. Cargo, pip, uv and `GOPATH` stay in each run's home instead, because they hold writable configuration. |
 | `~/.ghafk/run/` | Scratch directories of sandbox runs: the fresh home of each run. ghafk deletes them after each run, and removes any that a killed tick left behind after a day. The egress proxy socket is in `$XDG_RUNTIME_DIR` or a private temporary directory. |
 | `~/.ghafk/status.json` | The result of the last tick: time, error, token expiry, account, repositories and installed harnesses. ghafk writes it at the end of each tick, also when the tick fails. |
-| `~/.ghafk/tick.log` | The output of the ticks. At 1 MB, ghafk moves it to `tick.log.1` and starts a new file. |
+| `~/.ghafk/tick.log` | The output of the ticks. At 1 MB, ghafk moves it to `tick.log.1` and starts a new file. One tick writes at most 8 MB. |
 | `~/.config/systemd/user/ghafk.{service,timer}` | Linux: the units that `ghafk start` writes. To uninstall ghafk, run `ghafk stop` and delete them. |
 | `~/Library/LaunchAgents/ghafk.tick.plist` | macOS: the agent that `ghafk start` writes. To uninstall ghafk, run `ghafk stop` and delete it. |
 | `~/Library/Logs/ghafk.log` | macOS: the tick log. `ghafk status` shows its last 20 lines. |

@@ -13,7 +13,10 @@ import (
 	"github.com/mike-diff/ghafk/internal/harness"
 )
 
-const maxTickLog = 1 << 20
+const (
+	maxTickLog      = 1 << 20
+	maxTickLogWrite = 8 << 20
+)
 
 type repoStatus struct {
 	Name  string `json:"name"`
@@ -62,13 +65,25 @@ func installedHarnesses(henv harness.Env) []string {
 }
 
 type lockedWriter struct {
-	mu *sync.Mutex
-	w  io.Writer
+	mu   *sync.Mutex
+	w    io.Writer
+	left *int
 }
 
 func (l lockedWriter) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if *l.left <= 0 {
+		return len(p), nil
+	}
+	if len(p) > *l.left {
+		*l.left = 0
+		if _, err := l.w.Write(append(p[:len(p):len(p)], "\n[ghafk: this tick wrote more than 8 MiB; the rest is not in the log]\n"...)); err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	}
+	*l.left -= len(p)
 	return l.w.Write(p)
 }
 
@@ -87,7 +102,8 @@ func startTickLog(home string) (func(), error) {
 		return nil, err
 	}
 	fmt.Fprintf(file, "--- tick %s\n", time.Now().Format(time.RFC3339))
-	log := lockedWriter{mu: &sync.Mutex{}, w: file}
+	left := maxTickLogWrite
+	log := lockedWriter{mu: &sync.Mutex{}, w: file, left: &left}
 	origOut, origErr := os.Stdout, os.Stderr
 	done := make(chan struct{}, 2)
 	tee := func(orig *os.File) *os.File {

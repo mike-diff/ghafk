@@ -88,31 +88,127 @@ func fenced(text string) string {
 }
 
 var (
-	closingRef = regexp.MustCompile(`(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:[\w.-]+/[\w.-]+)?#\d+|https?://github\.com/[\w.-]+/[\w.-]+/(?:issues|pull)/\d+)`)
-	mention    = regexp.MustCompile("@[A-Za-z0-9][A-Za-z0-9-]*")
+	hiddenComment  = regexp.MustCompile(`(?s)<!--.*?(?:-->|$)`)
+	linkDefinition = regexp.MustCompile(`(?m)^ {0,3}\[[^\]\n]+\]:[ \t]*\S.*$`)
+	closingRef     = regexp.MustCompile(`(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:[\w.-]+/[\w.-]+)?#\d+|https?://github\.com/[\w.-]+/[\w.-]+/(?:issues|pull)/\d+)`)
+	unsafeMarkdown = regexp.MustCompile("@[A-Za-z0-9][A-Za-z0-9-]*|!\\[|(?i)<(?:img|picture|source|video|audio|svg|image)\\b")
+	wordJoiner     = string(rune(0x2060))
 )
+
+func visibleText(s string) string {
+	s = hiddenComment.ReplaceAllString(s, "")
+	s = linkDefinition.ReplaceAllString(s, "")
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if invisibleRune(r) {
+			return -1
+		}
+		return r
+	}, s))
+}
+
+func invisibleRune(r rune) bool {
+	return r == 0xad || r >= 0x200b && r <= 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x2060 && r <= 0x2064 || r >= 0x2066 && r <= 0x2069 || r == 0xfeff || r >= 0xe0000 && r <= 0xe007f
+}
+
+func issueText(is issue) string {
+	return strings.TrimRight("# Issue #"+strconv.Itoa(is.Number)+": "+visibleText(is.Title)+"\n\n"+visibleText(is.Body), "\n")
+}
 
 func neutralize(s string) string {
 	s = strings.ReplaceAll(s, "<!--", "&lt;!--")
 	s = closingRef.ReplaceAllString(s, "${1}${2}`${3}`")
+	code := codeBytes(s)
 	var b strings.Builder
 	last := 0
-	for _, m := range mention.FindAllStringIndex(s, -1) {
+	for _, m := range unsafeMarkdown.FindAllStringIndex(s, -1) {
 		start, end := m[0], m[1]
-		before, after := byte(0), byte(0)
-		if start > 0 {
-			before = s[start-1]
-		}
-		if end < len(s) {
-			after = s[end]
-		}
-		if isWordByte(before) || before == '`' && after == '`' {
+		if code[start] {
 			continue
 		}
-		b.WriteString(s[last:start] + "`" + s[start:end] + "`")
+		var safe string
+		switch s[start] {
+		case '!':
+			safe = "!\\["
+		case '<':
+			safe = "&lt;" + s[start+1:end]
+		default:
+			if start > 0 && isWordByte(s[start-1]) {
+				continue
+			}
+			safe = "`" + s[start:end] + "`"
+			if start > 0 && s[start-1] == '`' || end < len(s) && s[end] == '`' {
+				safe = "@" + wordJoiner + s[start+1:end]
+			}
+		}
+		b.WriteString(s[last:start] + safe)
 		last = end
 	}
 	return b.String() + s[last:]
+}
+
+func codeBytes(s string) []bool {
+	code := make([]bool, len(s)+1)
+	fence, fenceLen := byte(0), 0
+	at := 0
+	for _, line := range strings.SplitAfter(s, "\n") {
+		trimmed := strings.TrimLeft(line, " ")
+		run := 0
+		if len(line)-len(trimmed) <= 3 && trimmed != "" && (trimmed[0] == '`' || trimmed[0] == '~') {
+			run = len(trimmed) - len(strings.TrimLeft(trimmed, trimmed[:1]))
+		}
+		switch {
+		case fence == 0 && run >= 3:
+			fence, fenceLen = trimmed[0], run
+			markCode(code, at, at+len(line))
+		case fence != 0:
+			markCode(code, at, at+len(line))
+			if run >= fenceLen && trimmed[0] == fence {
+				fence = 0
+			}
+		}
+		at += len(line)
+	}
+	for i := 0; i < len(s); {
+		if s[i] != '`' || code[i] {
+			i++
+			continue
+		}
+		n := backtickRun(s, i)
+		end := -1
+		for j := i + n; j < len(s); {
+			if s[j] != '`' {
+				j++
+				continue
+			}
+			m := backtickRun(s, j)
+			if m == n {
+				end = j + m
+				break
+			}
+			j += m
+		}
+		if end < 0 {
+			i += n
+			continue
+		}
+		markCode(code, i, end)
+		i = end
+	}
+	return code
+}
+
+func backtickRun(s string, i int) int {
+	n := 0
+	for i+n < len(s) && s[i+n] == '`' {
+		n++
+	}
+	return n
+}
+
+func markCode(code []bool, from, to int) {
+	for i := from; i < to; i++ {
+		code[i] = true
+	}
 }
 
 func isWordByte(c byte) bool {

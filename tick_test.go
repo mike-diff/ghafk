@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -140,4 +141,21 @@ func TestACardFromBeforeTheDigestKeepsItsContract(t *testing.T) {
 	if editedSinceGroom(issue{Title: "t", Body: "any text"}, cardState{Contract: "c"}) {
 		t.Fatal("a card written before ghafk recorded the groomed text must keep its contract, not re-groom every issue in flight")
 	}
+}
+
+func TestASecondTickStopsWhileOneRuns(t *testing.T) {
+	home := t.TempDir()
+	unlock, err := lockTick(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lockTick(home); !errors.Is(err, errTickRunning) {
+		t.Fatalf("a second tick got %v; it would delete the first tick's worktree", err)
+	}
+	unlock()
+	again, err := lockTick(home)
+	if err != nil {
+		t.Fatalf("the lock was not released: %v", err)
+	}
+	again()
 }
