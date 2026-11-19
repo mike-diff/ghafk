@@ -91,7 +91,7 @@ var (
 	hiddenComment  = regexp.MustCompile(`(?s)<!--.*?(?:-->|$)`)
 	linkDefinition = regexp.MustCompile(`(?m)^ {0,3}\[[^\]\n]+\]:[ \t]*\S.*$`)
 	closingRef     = regexp.MustCompile(`(?i)\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:[\w.-]+/[\w.-]+)?#\d+|https?://github\.com/[\w.-]+/[\w.-]+/(?:issues|pull)/\d+)`)
-	unsafeMarkdown = regexp.MustCompile("@[A-Za-z0-9][A-Za-z0-9-]*|!\\[|(?i)<(?:img|picture|source|video|audio|svg|image)\\b")
+	unsafeMarkdown = regexp.MustCompile(`@[A-Za-z0-9][A-Za-z0-9-]*|!\[|(?i)<(?:img|picture|source|video|audio|svg|image)\b`)
 	wordJoiner     = string(rune(0x2060))
 )
 
