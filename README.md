@@ -187,7 +187,10 @@ label, harness profile and file. To show ghafk as a bot on GitHub,
 - Only people with write access can send commands or add prompt text.
 - ghafk works only the pull requests that it opened.
 - A change to `.github/` or `.ghafk/` always waits for you.
-- Prompts are not controls. Use branch protection for a real gate.
+- Prompts are not controls. Use branch protection for a real gate. On a
+  public repository, require a review from a person before a merge.
+- Your CI runs the agent's code with the secrets of the repository. See
+  [other risks](docs/security.md#other-risks).
 
 Read the full [security model](docs/security.md). To report a
 vulnerability, see [SECURITY.md](SECURITY.md).

@@ -130,7 +130,7 @@ func unsafeBind(dir string) string {
 	return exposesSecrets(dir, home)
 }
 
-var secretDirs = []string{".ssh", ".gnupg", ".aws", ".ghafk", ".config/gh", ".local/share/keyrings", ".local/share/opencode", ".config/opencode", ".claude", ".codex", ".pi", ".omp", ".sesh"}
+var secretDirs = []string{".ssh", ".gnupg", ".aws", ".ghafk", ".config/gh", ".local/share/keyrings", ".local/share/opencode", ".config/opencode", ".claude", ".codex", ".pi", ".omp", ".sesh", ".docker", ".kube", ".cargo", ".config/gcloud", ".azure", ".password-store", ".netrc"}
 
 func exposesSecrets(dir, home string) string {
 	for _, d := range dedup([]string{filepath.Clean(dir), evalPath(dir)}) {

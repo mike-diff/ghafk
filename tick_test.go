@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -139,5 +140,42 @@ func TestAnUnchangedIssueKeepsItsContract(t *testing.T) {
 func TestACardFromBeforeTheDigestKeepsItsContract(t *testing.T) {
 	if editedSinceGroom(issue{Title: "t", Body: "any text"}, cardState{Contract: "c"}) {
 		t.Fatal("a card written before ghafk recorded the groomed text must keep its contract, not re-groom every issue in flight")
+	}
+}
+
+func TestASecondTickStopsWhileOneRuns(t *testing.T) {
+	home := t.TempDir()
+	unlock, err := lockTick(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lockTick(home); !errors.Is(err, errTickRunning) {
+		t.Fatalf("a second tick got %v; it would delete the first tick's worktree", err)
+	}
+	unlock()
+	again, err := lockTick(home)
+	if err != nil {
+		t.Fatalf("the lock was not released: %v", err)
+	}
+	again()
+}
+
+func TestAnIssueThatFailsEveryTickParks(t *testing.T) {
+	calls := fakeGH(t, nil)
+	home, is := t.TempDir(), issue{Number: 5}
+	for i := 1; i <= stuckLimit; i++ {
+		if err := countFailure(home, "/r/demo", "demo", "owner", "agent", is, errors.New("worktree add failed")); err == nil {
+			t.Fatal("the failure was swallowed")
+		}
+		if parked := called(*calls, "issue edit 5 --add-label needs-human"); parked != (i == stuckLimit) {
+			t.Fatalf("after %d failures parked = %v; a stuck issue blocks every other issue in the repository", i, parked)
+		}
+	}
+	countFailure(home, "/r/demo", "demo", "owner", "agent", is, errors.New("x"))
+	if err := countFailure(home, "/r/demo", "demo", "owner", "agent", is, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stuckFile(home, "/r/demo", 5)); !os.IsNotExist(err) {
+		t.Fatal("a success did not reset the failure count")
 	}
 }

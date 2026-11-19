@@ -83,7 +83,7 @@ Usage:
   ghafk engine token                       deprecated: replace the engine's GitHub token
   ghafk engine start | stop                deprecated: turn the engine's timer on or off
   ghafk engine remove [--purge]            remove the engine service; --purge also deletes its account and home
-  ghafk update                             install the newest ghafk from main
+  ghafk update                             install the newest ghafk release, or main if there is none
   ghafk help                               show this help
 `
 

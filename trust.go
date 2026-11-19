@@ -19,7 +19,10 @@ func writeChecker(repo string) func(string) bool {
 		}
 		perm, err := ghOwner(repo, "api", "repos/{owner}/{repo}/collaborators/"+login+"/permission", "--jq", ".permission")
 		perm = strings.TrimSpace(perm)
-		ok := err == nil && (perm == "admin" || perm == "maintain" || perm == "write")
+		if err != nil {
+			return false
+		}
+		ok := perm == "admin" || perm == "maintain" || perm == "write"
 		cache[login] = ok
 		return ok
 	}

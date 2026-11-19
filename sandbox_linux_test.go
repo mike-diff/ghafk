@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -212,6 +213,66 @@ func TestTheGhafkBinaryIsBoundAloneNotItsDirectory(t *testing.T) {
 	}
 	if strings.Contains(args, "\n"+filepath.Dir(bin)+"\n") {
 		t.Fatalf("the directory of the ghafk binary must not be bound:\n%s", args)
+	}
+}
+
+func TestHostTreesOutsideTheRunStayHidden(t *testing.T) {
+	needSandbox(t)
+	secret := ""
+	for _, tree := range hostHiddenTrees() {
+		_ = fs.WalkDir(os.DirFS(tree), ".", func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return fs.SkipDir
+			}
+			if d.Type().IsRegular() {
+				if f, err := os.Open(filepath.Join(tree, p)); err == nil {
+					f.Close()
+					secret = filepath.Join(tree, p)
+					return fs.SkipAll
+				}
+			}
+			return nil
+		})
+		if secret != "" {
+			break
+		}
+	}
+	if secret == "" {
+		t.Skip("no readable file under /opt, /srv, /mnt, /media or /var")
+	}
+	var out bytes.Buffer
+	err := runSandboxed(sandboxOpts{
+		name: "checks", dir: t.TempDir(), home: t.TempDir(), timeout: time.Minute,
+		command: "test -e " + secret + " && echo visible || echo hidden",
+	}, &out, &out)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "hidden") {
+		t.Fatalf("the host file %s is visible inside the sandbox: %s", secret, out.String())
+	}
+}
+
+func TestAPathEntryUnderAHostTreeBindsItsInstall(t *testing.T) {
+	trees := hostHiddenTrees()
+	if len(trees) == 0 {
+		t.Skip("no host tree to hide")
+	}
+	install := filepath.Join(trees[0], "ghafk-tool")
+	home := t.TempDir()
+	spec := sandboxSpec{personHome: home, homeHide: home, runHome: filepath.Join(home, "run"), runDir: home, cacheDir: t.TempDir(), sockDir: t.TempDir(), path: filepath.Join(install, "bin") + ":/usr/bin"}
+	args := bwrapArgs(spec, 1, t.TempDir(), "true")
+	hide, bind := -1, -1
+	for i := 0; i+2 < len(args); i++ {
+		if args[i] == "--tmpfs" && args[i+1] == trees[0] {
+			hide = i
+		}
+		if args[i] == "--ro-bind-try" && args[i+1] == install && args[i+2] == install {
+			bind = i
+		}
+	}
+	if hide < 0 || bind < hide {
+		t.Fatalf("a PATH entry under %s must show its install directory through the tmpfs:\n%s", trees[0], strings.Join(args, "\n"))
 	}
 }
 

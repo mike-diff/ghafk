@@ -270,8 +270,8 @@ func TestMergeMatchesTheCheckedCommit(t *testing.T) {
 
 func mergeRun(t *testing.T, repo, work, after string) *prRun {
 	t.Helper()
-	return &prRun{repo: repo, work: work, def: "main", base: "demo", login: "owner", n: 5, prNum: "7", branch: "agent/5", after: after,
-		lease: "--force-with-lease=refs/heads/agent/5:" + after, card: openCard("repo", issue{Number: 5}, "owner"),
+	return &prRun{repo: repo, work: work, def: "main", base: "demo", login: "owner", n: 5, issueNum: "5", prNum: "7", branch: "agent/5", after: after,
+		wf: workflow{label: "agent"}, lease: "--force-with-lease=refs/heads/agent/5:" + after, card: openCard("repo", issue{Number: 5}, "owner"),
 		at: parkPlace{repo: "repo", base: "demo", login: "owner", label: "agent", target: "7", issue: 5}}
 }
 
@@ -309,8 +309,31 @@ func TestMergeParksWhenTheBranchMovedAfterTheChecks(t *testing.T) {
 	}
 }
 
+func openIssue(cmd string) (string, error) {
+	if strings.HasPrefix(cmd, "issue view 5") {
+		return `{"number":5,"state":"OPEN","labels":[{"name":"agent"}]}`, nil
+	}
+	return "", nil
+}
+
+func TestMergeSkipsAnIssueStoppedDuringTheRun(t *testing.T) {
+	calls := fakeGH(t, func(cmd string) (string, error) {
+		if strings.HasPrefix(cmd, "issue view 5") {
+			return `{"number":5,"state":"OPEN","labels":[]}`, nil
+		}
+		return "", nil
+	})
+	repo, work, checked := mergeWorktree(t)
+	if err := mergeRun(t, repo, work, checked).merge(); err != nil {
+		t.Fatal(err)
+	}
+	if called(*calls, "pr merge") {
+		t.Fatalf("ghafk merged after /stop removed the label: %v", *calls)
+	}
+}
+
 func TestMergePushesAndPinsTheCheckedCommit(t *testing.T) {
-	calls := fakeGH(t, nil)
+	calls := fakeGH(t, openIssue)
 	repo, work, checked := mergeWorktree(t)
 	if err := mergeRun(t, repo, work, checked).merge(); err != nil {
 		t.Fatal(err)

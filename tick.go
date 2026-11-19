@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/mike-diff/ghafk/internal/ghapp"
@@ -16,6 +18,18 @@ func tick() (err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
+	}
+	unlock, err := lockTick(home)
+	if errors.Is(err, errTickRunning) {
+		fmt.Println("ghafk: another tick is running; this one stops")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if _, ok := installedEngine(); !ok {
+		os.Chmod(filepath.Join(home, ".ghafk"), 0o700)
 	}
 	if stop, logErr := startTickLog(home); logErr == nil {
 		defer stop()
@@ -88,6 +102,27 @@ func tick() (err error) {
 	return nil
 }
 
+var errTickRunning = errors.New("another tick is running")
+
+func lockTick(home string) (func(), error) {
+	path := filepath.Join(home, ".ghafk", "tick.lock")
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, errTickRunning
+		}
+		return nil, err
+	}
+	return func() { f.Close() }, nil
+}
+
 func readRepos(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -151,15 +186,40 @@ func workRepo(home, repo, login string, henv harness.Env) error {
 		return parkForApproval(repo, base, login, wf.label, is)
 	}
 	if contractText(is.Comments, login) != "" && !staleAfterContract(is.Comments, login) && !editedSinceGroom(is, st) {
-		if err := runIssue(home, repo, base, login, wf, contractText(is.Comments, login), is); err != nil {
-			return fmt.Errorf("#%d: %w", is.Number, err)
-		}
+		err = runIssue(home, repo, base, login, wf, contractText(is.Comments, login), is)
+	} else {
+		err = groomIssue(home, repo, base, login, wf, is)
+	}
+	return countFailure(home, repo, base, login, wf.label, is, err)
+}
+
+const stuckLimit = 5
+
+func stuckFile(home, repo string, n int) string {
+	return filepath.Join(home, ".ghafk", "stuck", repoSlug(repo)+"-"+strconv.Itoa(n))
+}
+
+func countFailure(home, repo, base, login, label string, is issue, runErr error) error {
+	path := stuckFile(home, repo, is.Number)
+	if runErr == nil {
+		os.Remove(path)
 		return nil
 	}
-	if err := groomIssue(home, repo, base, login, wf, is); err != nil {
-		return fmt.Errorf("#%d: %w", is.Number, err)
+	err := fmt.Errorf("#%d: %w", is.Number, runErr)
+	data, _ := os.ReadFile(path)
+	count, _ := strconv.Atoi(strings.TrimSpace(string(data)))
+	if count++; count < stuckLimit {
+		if os.MkdirAll(filepath.Dir(path), 0o700) == nil {
+			os.WriteFile(path, []byte(strconv.Itoa(count)), 0o600)
+		}
+		return err
 	}
-	return nil
+	os.Remove(path)
+	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: fmt.Sprintf("This issue failed on %d ticks in a row.", stuckLimit), body: fenced(homeRelative(runErr.Error())), footer: retryFooter()}
+	if perr := park(parkPlace{repo: repo, base: base, login: login, label: label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments}, "failed on every tick", spec); perr != nil {
+		return errors.Join(err, perr)
+	}
+	return err
 }
 
 func tooManyComments(lists ...[]prComment) bool {
@@ -179,7 +239,7 @@ func parkTooManyComments(repo, base, login, label string, is issue) error {
 
 func parkForApproval(repo, base, login, label string, is issue) error {
 	stepf(base, is.Number, "needs approval")
-	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: "Someone without write access opened this issue.", body: "A maintainer must read the title and description, then comment `/start`. ghafk works only that exact text. If the text changes later, ghafk stops and needs a new `/start`.", footer: approvalFooter()}
+	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: "Someone without write access opened this issue.", body: "A maintainer must read the title and description, then comment `/start`. ghafk works only that exact text. Agents do not see HTML comments, link definitions or invisible characters. If the text changes later, ghafk stops and needs a new `/start`.", footer: approvalFooter()}
 	return park(parkPlace{repo: repo, base: base, login: login, label: label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments}, "approval needed", spec)
 }
 

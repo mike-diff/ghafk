@@ -51,7 +51,7 @@ func (p *egressProxy) untrack(conn net.Conn) {
 
 func hostAllowed(host string, allowed []string) bool {
 	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
-	if host == "" {
+	if host == "" || strings.HasPrefix(host, ".") || strings.Contains(host, "..") {
 		return false
 	}
 	for _, entry := range allowed {
@@ -102,16 +102,33 @@ func (p *egressProxy) addr() string {
 	return p.listener.Addr().String()
 }
 
+var proxyConnLimit = 256
+
 func (p *egressProxy) serve() {
+	slots := make(chan struct{}, proxyConnLimit)
 	for {
 		conn, err := p.listener.Accept()
 		if err != nil {
-			return
-		}
-		if !p.track(conn) {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
 			continue
 		}
-		go p.handle(conn)
+		select {
+		case slots <- struct{}{}:
+		default:
+			conn.Close()
+			continue
+		}
+		if !p.track(conn) {
+			<-slots
+			continue
+		}
+		go func() {
+			defer func() { <-slots }()
+			p.handle(conn)
+		}()
 	}
 }
 
@@ -225,9 +242,14 @@ func lookupHost(host string) ([]net.IP, error) {
 var refusedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("100.64.0.0/10"),
 	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("255.255.255.255/32"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("::/96"),
 	netip.MustParsePrefix("fec0::/10"),
 	netip.MustParsePrefix("64:ff9b::/96"),
+	netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("2001::/32"),
 	netip.MustParsePrefix("2002::/16"),
 }
 

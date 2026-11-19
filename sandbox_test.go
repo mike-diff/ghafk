@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -716,7 +718,7 @@ func TestMergeLoginRefreshTakesOnlyTokenFields(t *testing.T) {
 }
 
 func TestRefusedIPBlocksPrivateAndLoopbackTargets(t *testing.T) {
-	for _, s := range []string{"127.0.0.1", "::1", "10.1.2.3", "192.168.1.1", "172.16.0.9", "169.254.1.1", "fe80::1", "224.0.0.1", "0.0.0.0", "fd00::1", "255.255.255.255", "100.64.1.1", "100.127.255.255", "0.1.2.3", "fec0::1", "64:ff9b::1.2.3.4", "2002:dead::1"} {
+	for _, s := range []string{"127.0.0.1", "::1", "10.1.2.3", "192.168.1.1", "172.16.0.9", "169.254.1.1", "fe80::1", "224.0.0.1", "0.0.0.0", "fd00::1", "255.255.255.255", "100.64.1.1", "100.127.255.255", "0.1.2.3", "fec0::1", "64:ff9b::1.2.3.4", "2002:dead::1", "198.18.0.1", "198.19.255.254", "192.0.0.8", "240.0.0.1", "250.1.2.3", "64:ff9b:1::a00:1", "2001:0:4136:e378::1", "::127.0.0.1", "::10.0.0.1", "::ffff:10.0.0.1", "::ffff:198.18.0.1"} {
 		if ip := net.ParseIP(s); !refusedIP(ip) {
 			t.Fatalf("%s must be refused", s)
 		}
@@ -1446,5 +1448,18 @@ func TestAVersionManagerShimBindsItsRoot(t *testing.T) {
 	os.WriteFile(liar, []byte("#!/usr/bin/env bash\nexport PYENV_ROOT=\""+root+"\"\n"), 0o755)
 	if dirs := programBindShallow(liar); slices.Contains(dirs, root) || slices.Contains(dirs, other) {
 		t.Fatalf("a shim naming another root must bind neither: %v", dirs)
+	}
+}
+
+func TestLoginCopyBackKeepsTheAccount(t *testing.T) {
+	jwt := func(sub string) string {
+		return "eyJhbGciOiJub25lIn0." + base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"`+sub+`"}`)) + ".sig"
+	}
+	orig := []byte(`{"access_token":"` + jwt("me") + `"}`)
+	if merged, ok := mergeLoginRefresh(orig, []byte(`{"access_token":"`+jwt("attacker")+`"}`)); !ok || !bytes.Equal(merged, orig) {
+		t.Fatalf("a token for another account replaced the host login: %s", merged)
+	}
+	if merged, ok := mergeLoginRefresh(orig, []byte(`{"access_token":"`+jwt("me")+`x"}`)); !ok || bytes.Equal(merged, orig) {
+		t.Fatalf("a refreshed token for the same account was dropped: %s", merged)
 	}
 }

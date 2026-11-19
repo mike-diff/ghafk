@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -121,7 +120,7 @@ func harnessDefault(profile, model string) error {
 	if !replaced {
 		lines = append(lines, line)
 	}
-	if err := os.MkdirAll(filepath.Dir(config), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(config), 0o700); err != nil {
 		return err
 	}
 	if err := os.WriteFile(config, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
@@ -195,7 +194,7 @@ func harnessTest(profile, model string) error {
 	if err := os.WriteFile(filepath.Join(work, "note.txt"), []byte("before\n"), 0o644); err != nil {
 		return err
 	}
-	var out bytes.Buffer
+	var out tailBuffer
 	runErr := runSandboxed(sandboxOpts{name: "worker", dir: work, command: r.Command, stdin: harnessTestPrompt, timeout: harnessTestTimeout, role: &r}, &out, os.Stderr)
 
 	results := make([]harnessResult, 0, 6)

@@ -23,7 +23,7 @@ personal files. See [security](security.md).
 | `ghafk engine token` | Deprecated. Replaces the GitHub token of an engine account. |
 | `ghafk engine start`, `ghafk engine stop` | Deprecated. Turns the timer of an engine account on or off. |
 | `ghafk engine remove [--purge]` | Removes the service and the binary of an engine account. `--purge` also deletes the account and its home. Run it before you change to `ghafk start`. |
-| `ghafk update` | Installs the newest ghafk from `main`. The next tick uses it. |
+| `ghafk update` | Installs the newest release tag of ghafk, or `main` if the repository has no release. The next tick uses it. |
 | `ghafk start` | Installs and starts the timer, with the `interval` from the [machine settings](#machine-settings). On Linux, it writes systemd user units. On macOS, it writes a launchd agent. |
 | `ghafk stop` | Stops the timer. A tick that is running finishes first. On macOS, the command waits for that tick. |
 | `ghafk status` | Shows the timer, the recent log, the expiry date of the GitHub token, the GitHub account that ghafk uses, and the state of each repository. |
@@ -243,7 +243,7 @@ its own home: `/var/lib/ghafk` on Linux and `/usr/local/var/ghafk` on macOS.
 | `~/.ghafk/cache/` | The per-repository sandbox caches: `go-build`, `go-mod`, npm, the pnpm store and pnpm cache. Delete a directory to start clean. Cargo, pip, uv and `GOPATH` stay in each run's home instead, because they hold writable configuration. |
 | `~/.ghafk/run/` | Scratch directories of sandbox runs: the fresh home of each run. ghafk deletes them after each run, and removes any that a killed tick left behind after a day. The egress proxy socket is in `$XDG_RUNTIME_DIR` or a private temporary directory. |
 | `~/.ghafk/status.json` | The result of the last tick: time, error, token expiry, account, repositories and installed harnesses. ghafk writes it at the end of each tick, also when the tick fails. |
-| `~/.ghafk/tick.log` | The output of the ticks. At 1 MB, ghafk moves it to `tick.log.1` and starts a new file. |
+| `~/.ghafk/tick.log` | The output of the ticks. At 1 MB, ghafk moves it to `tick.log.1` and starts a new file. One tick writes at most 8 MB. |
 | `~/.config/systemd/user/ghafk.{service,timer}` | Linux: the units that `ghafk start` writes. To uninstall ghafk, run `ghafk stop` and delete them. |
 | `~/Library/LaunchAgents/ghafk.tick.plist` | macOS: the agent that `ghafk start` writes. To uninstall ghafk, run `ghafk stop` and delete it. |
 | `~/Library/Logs/ghafk.log` | macOS: the tick log. `ghafk status` shows its last 20 lines. |
