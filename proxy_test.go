@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -26,6 +27,9 @@ func TestHostAllowedMatchesExactAndWildcard(t *testing.T) {
 		"proxy.golang.org":         true,
 		"":                         false,
 		"registry.npmjs.org":       false,
+		"a..internal.example.com":  false,
+		".x.internal.example.com":  false,
+		"..internal.example.com":   false,
 	}
 	for host, want := range cases {
 		if got := hostAllowed(host, allowed); got != want {
@@ -119,6 +123,49 @@ func TestProxyDeniesAndRecordsHost(t *testing.T) {
 	}
 	if denied := p.denials(); len(denied) != 1 || denied[0] != "evil.example" {
 		t.Fatalf("denials = %v", denied)
+	}
+}
+
+func TestProxyClosesConnectionsOverItsLimit(t *testing.T) {
+	old := proxyConnLimit
+	proxyConnLimit = 1
+	t.Cleanup(func() { proxyConnLimit = old })
+	p := &egressProxy{allowed: egressList("", nil)}
+	if err := p.listen("tcp", "127.0.0.1:0"); err != nil {
+		t.Fatal(err)
+	}
+	defer p.close()
+	held, err := net.DialTimeout("tcp", p.addr(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	extra, err := net.DialTimeout("tcp", p.addr(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer extra.Close()
+	_ = extra.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, err := extra.Read(make([]byte, 1)); err != io.EOF {
+		t.Fatalf("a connection over the limit must be closed at once: %v", err)
+	}
+	held.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		conn, err := net.DialTimeout("tcp", p.addr(), 5*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		fmt.Fprint(conn, "CONNECT evil.example:443 HTTP/1.1\r\nHost: evil.example:443\r\n\r\n")
+		line, _ := bufio.NewReader(conn).ReadString('\n')
+		conn.Close()
+		if strings.HasPrefix(line, "HTTP/1.1 403") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a freed slot was not reused")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

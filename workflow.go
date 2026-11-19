@@ -33,7 +33,7 @@ const maxTimeoutMinutes = 12 * 60
 
 func parseWorkflow(data string, henv harness.Env) (workflow, error) {
 	wf := workflow{label: "agent", timeout: 30 * time.Minute}
-	lines := strings.Split(data, "\n")
+	lines := strings.Split(strings.TrimPrefix(data, string(rune(0xfeff))), "\n")
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
 		return wf, fmt.Errorf("WORKFLOW.md: missing front matter")
 	}
@@ -60,7 +60,9 @@ func parseWorkflow(data string, henv harness.Env) (workflow, error) {
 		case "reconciler":
 			reconciler = strings.TrimSpace(value)
 		case "label":
-			wf.label = strings.TrimSpace(value)
+			if wf.label = strings.TrimSpace(value); wf.label == "" {
+				return wf, fmt.Errorf("WORKFLOW.md: label must not be empty")
+			}
 		case "checks":
 			wf.checks = strings.TrimSpace(value)
 		case "egress":

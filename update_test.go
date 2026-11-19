@@ -15,6 +15,9 @@ func TestUpdateInstallsMainPastTheModuleProxy(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go"), []byte(fakeGo), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := update(); err != nil {
 		t.Fatal(err)
@@ -25,6 +28,13 @@ func TestUpdateInstallsMainPastTheModuleProxy(t *testing.T) {
 	}
 	if bin, err := installedBinary(); err != nil || bin != filepath.Join(dir, "ghafk") {
 		t.Fatalf("installed binary = %q, %v", bin, err)
+	}
+}
+
+func TestUpdatePrefersTheNewestRelease(t *testing.T) {
+	refs := "a\trefs/tags/v1.2.0\nb\trefs/tags/v1.10.0\nc\trefs/tags/v2.0.0-rc1\nd\trefs/tags/latest\n"
+	if got := newestRelease(refs); got != "v1.10.0" {
+		t.Fatalf("newest release = %q; update would install an older or unreleased version", got)
 	}
 }
 

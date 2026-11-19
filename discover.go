@@ -51,7 +51,7 @@ func engineRepos(home string, skip, listed []string, cloneNew bool) ([]target, e
 	for _, name := range newRepos(append(listed, parseDiscovery(out)...), seen, skip) {
 		path := filepath.Join(home, ".ghafk", "clones", name)
 		if _, err := os.Stat(path); os.IsNotExist(err) && cloneNew {
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 				return targets, err
 			}
 			if _, err := ghOwner(home, "repo", "clone", name, path); err != nil {

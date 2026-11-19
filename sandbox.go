@@ -164,6 +164,9 @@ func setupFailed(format string, args ...any) error {
 }
 
 func runSandboxed(o sandboxOpts, stdout, stderr io.Writer) error {
+	redacted := &redactingWriter{w: stderr}
+	defer redacted.flush()
+	stderr = redacted
 	spec, err := buildSandbox(o)
 	if err != nil {
 		removeTree(spec.runDir)

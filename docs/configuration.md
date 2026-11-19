@@ -23,7 +23,7 @@ personal files. See [security](security.md).
 | `ghafk engine token` | Deprecated. Replaces the GitHub token of an engine account. |
 | `ghafk engine start`, `ghafk engine stop` | Deprecated. Turns the timer of an engine account on or off. |
 | `ghafk engine remove [--purge]` | Removes the service and the binary of an engine account. `--purge` also deletes the account and its home. Run it before you change to `ghafk start`. |
-| `ghafk update` | Installs the newest ghafk from `main`. The next tick uses it. |
+| `ghafk update` | Installs the newest release tag of ghafk, or `main` if the repository has no release. The next tick uses it. |
 | `ghafk start` | Installs and starts the timer, with the `interval` from the [machine settings](#machine-settings). On Linux, it writes systemd user units. On macOS, it writes a launchd agent. |
 | `ghafk stop` | Stops the timer. A tick that is running finishes first. On macOS, the command waits for that tick. |
 | `ghafk status` | Shows the timer, the recent log, the expiry date of the GitHub token, the GitHub account that ghafk uses, and the state of each repository. |

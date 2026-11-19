@@ -33,7 +33,7 @@ func userHoldsLogin(login string) bool {
 	if !seen {
 		out, err := ghOwner(".", "api", "users/"+login, "--jq", ".type")
 		typ = strings.TrimSpace(out)
-		if err != nil && !strings.Contains(err.Error(), "404") {
+		if err != nil && !strings.Contains(err.Error(), "(HTTP 404)") {
 			typ = "unknown"
 		}
 		loginTypes[login] = typ

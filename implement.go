@@ -125,7 +125,7 @@ func runIssue(home, repo, base, login string, wf workflow, contract string, is i
 	if err != nil {
 		return parkOnError(at, "pr", "ghafk could not list the changes.", err)
 	}
-	prURL, err := ghOwner(work, "pr", "create", "--title", subject, "--head", branch, "--body", renderPRBody(is.Number, summaryLines(answer), stat, prState{}))
+	prURL, err := ghOwner(repo, "pr", "create", "--title", subject, "--head", branch, "--body", renderPRBody(is.Number, summaryLines(answer), stat, prState{}))
 	if err != nil {
 		return parkOnError(at, "pr", "Opening the pull request failed.", err)
 	}

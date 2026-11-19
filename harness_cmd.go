@@ -120,7 +120,7 @@ func harnessDefault(profile, model string) error {
 	if !replaced {
 		lines = append(lines, line)
 	}
-	if err := os.MkdirAll(filepath.Dir(config), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(config), 0o700); err != nil {
 		return err
 	}
 	if err := os.WriteFile(config, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {

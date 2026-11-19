@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,68 @@ func TestPatternsFindKeysButNotBase64Runs(t *testing.T) {
 	}
 	if found := findSecrets("key: " + google); len(found) == 0 {
 		t.Fatal("a standalone Google key must be found")
+	}
+	for _, before := range []string{"x", "0", "_", "-", "/", "+"} {
+		if found := findSecrets("url" + before + token); len(found) == 0 {
+			t.Errorf("a GitHub token after %q must be found", before)
+		}
+	}
+	for rule, key := range map[string]string{
+		"a Stripe key":         "sk" + "_live_" + strings.Repeat("S", 24),
+		"a GitLab token":       "glpat" + "-" + strings.Repeat("L", 20),
+		"an npm token":         "npm" + "_" + strings.Repeat("N", 36),
+		"a Hugging Face token": "hf" + "_" + strings.Repeat("H", 34),
+		"an OpenRouter key":    "sk-or" + "-v1-" + strings.Repeat("a1", 32),
+		"a Groq key":           "gsk" + "_" + strings.Repeat("G", 52),
+		"a JSON web token":     "eyJ" + strings.Repeat("h", 12) + ".eyJ" + strings.Repeat("p", 12) + "." + strings.Repeat("s", 20),
+		"an Azure storage key": "AccountKey" + "=" + strings.Repeat("Z", 86) + "==",
+	} {
+		if found := findSecrets("value: " + key); len(found) != 1 || found[0].rule != rule {
+			t.Errorf("%s must be found as %s: %v", key, rule, found)
+		}
+	}
+	for _, plain := range []string{"desk-admin-panel-configuration-x", "hf_short", "npm_install", "eyJhbGciOiJIUzI1NiJ9"} {
+		if found := findSecrets("text " + plain); len(found) != 0 {
+			t.Errorf("an ordinary value matched a key pattern: %v", found)
+		}
+	}
+}
+
+func TestStderrIsRedactedPerLineAndFlushed(t *testing.T) {
+	resetSecretRegistry(t)
+	token := dummyGitHubToken()
+	var out strings.Builder
+	w := &redactingWriter{w: &out}
+	w.Write([]byte("start " + token[:10]))
+	w.Write([]byte(token[10:] + " end\ntail " + token))
+	if strings.Contains(out.String(), "tail") {
+		t.Fatalf("an incomplete line was written early: %q", out.String())
+	}
+	w.flush()
+	if got := out.String(); strings.Contains(got, token) || strings.Count(got, secretPlaceholder) != 2 || !strings.HasSuffix(got, "tail "+secretPlaceholder) {
+		t.Fatalf("stderr was not redacted per line: %q", got)
+	}
+}
+
+func TestScanFindsAKnownValueInWrappedBase64(t *testing.T) {
+	resetSecretRegistry(t)
+	value := "wrapped-run-credential-" + strings.Repeat("w9", 30)
+	registerSecret(value)
+	encoded := base64.StdEncoding.EncodeToString([]byte(value))
+	var wrapped strings.Builder
+	for len(encoded) > 76 {
+		wrapped.WriteString("  " + encoded[:76] + "\n")
+		encoded = encoded[76:]
+	}
+	wrapped.WriteString("  " + encoded + "\n")
+	dir, base := secretRepo(t)
+	commitFile(t, dir, "blob.yaml", "data: |\n"+wrapped.String(), "feat: add blob")
+	hits, err := scanChange(dir, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 || hits[0].where != strconv.Quote("blob.yaml") {
+		t.Fatalf("a known value in wrapped base64 must be found: %v", hits)
 	}
 }
 

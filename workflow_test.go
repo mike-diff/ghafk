@@ -137,3 +137,13 @@ func TestTheWorkingTreeFallbackIgnoresEgressAndSecretsAllow(t *testing.T) {
 		t.Fatalf("a working-tree workflow widened egress or secrets-allow: %v %v", wf.egress, wf.secretsAllow)
 	}
 }
+
+func TestParseWorkflowRejectsAnEmptyLabel(t *testing.T) {
+	if _, err := parseWorkflow("---\nworker: w\nlabel:\n---\n", harness.Env{Profiles: harness.Builtins()}); err == nil {
+		t.Fatal("an empty label was accepted, so ghafk could work issues that nobody labeled")
+	}
+	bom := string(rune(0xfeff))
+	if _, err := parseWorkflow(bom+"---\nworker: w\n---\n", harness.Env{Profiles: harness.Builtins()}); err != nil {
+		t.Fatalf("a byte order mark broke the front matter: %v", err)
+	}
+}

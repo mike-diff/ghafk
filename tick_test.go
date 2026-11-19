@@ -159,3 +159,23 @@ func TestASecondTickStopsWhileOneRuns(t *testing.T) {
 	}
 	again()
 }
+
+func TestAnIssueThatFailsEveryTickParks(t *testing.T) {
+	calls := fakeGH(t, nil)
+	home, is := t.TempDir(), issue{Number: 5}
+	for i := 1; i <= stuckLimit; i++ {
+		if err := countFailure(home, "/r/demo", "demo", "owner", "agent", is, errors.New("worktree add failed")); err == nil {
+			t.Fatal("the failure was swallowed")
+		}
+		if parked := called(*calls, "issue edit 5 --add-label needs-human"); parked != (i == stuckLimit) {
+			t.Fatalf("after %d failures parked = %v; a stuck issue blocks every other issue in the repository", i, parked)
+		}
+	}
+	countFailure(home, "/r/demo", "demo", "owner", "agent", is, errors.New("x"))
+	if err := countFailure(home, "/r/demo", "demo", "owner", "agent", is, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stuckFile(home, "/r/demo", 5)); !os.IsNotExist(err) {
+		t.Fatal("a success did not reset the failure count")
+	}
+}

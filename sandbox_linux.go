@@ -16,11 +16,21 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
 
 const sandboxTool = "bwrap"
+
+var hostTrees = []string{"/opt", "/srv", "/mnt", "/media", "/var"}
+
+var hostTreeLinks = []string{"/var/run", "/var/lock"}
+
+var resourceLimits = []string{"systemd-run", "--user", "--scope", "--quiet", "--collect", "-p", "MemoryMax=75%", "-p", "TasksMax=4096", "--"}
+
+var limitsOnce sync.Once
+var limitsPrefix []string
 
 const usernsRestrictionFile = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
 
@@ -96,7 +106,22 @@ func sandboxLaunch(o sandboxOpts, spec sandboxSpec, proxy *egressProxy, command 
 	defer stopLocal()
 	ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, sandboxTool, args...)
+	name := sandboxTool
+	if limits := sandboxLimits(); len(limits) > 0 {
+		for _, key := range []string{"XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"} {
+			if value := os.Getenv(key); value != "" && !slices.ContainsFunc(env, func(kv string) bool { return strings.HasPrefix(kv, key+"=") }) {
+				env = append(env, key+"="+value)
+				args = append([]string{"--unsetenv", key}, args...)
+			}
+		}
+		tool, err := exec.LookPath(sandboxTool)
+		if err != nil {
+			return fmt.Errorf("%s: %w", o.name, err)
+		}
+		args = slices.Concat(limits[1:], []string{tool}, args)
+		name = limits[0]
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = "/"
 	cmd.Stdin = strings.NewReader(o.stdin)
 	cmd.Stdout = stdout
@@ -123,12 +148,26 @@ func bwrapArgs(spec sandboxSpec, port int, dir, command string) []string {
 		"--proc", "/proc",
 		"--tmpfs", "/run",
 		"--tmpfs", "/tmp",
-		"--tmpfs", spec.homeHide,
 	}
+	for _, tree := range hostHiddenTrees() {
+		args = append(args, "--tmpfs", tree)
+	}
+	for _, link := range hostTreeLinks {
+		if target, err := os.Readlink(link); err == nil && underHiddenTree(spec, link) {
+			args = append(args, "--symlink", target, link)
+		}
+	}
+	if underHiddenTree(spec, "/var/tmp") {
+		args = append(args, "--tmpfs", "/var/tmp")
+	}
+	args = append(args, "--tmpfs", spec.homeHide)
 	if spec.homeReal != "" && !underTree(spec.homeReal, spec.homeHide) {
 		args = append(args, "--tmpfs", spec.homeReal)
 	}
 	args = append(args, "--bind", spec.runHome, spec.personHome)
+	for _, dir := range spec.pathUnderHostTrees() {
+		args = append(args, "--ro-bind-try", dir, dir)
+	}
 	for _, dir := range spec.programsUnderHome() {
 		args = append(args, "--ro-bind", dir, dir)
 	}
@@ -269,7 +308,47 @@ func (s *sandboxSpec) hiddenTrees() []string {
 	if s.homeReal != "" {
 		trees = append(trees, s.homeReal)
 	}
-	return append(trees, "/tmp", "/run")
+	return append(append(trees, "/tmp", "/run"), hostHiddenTrees()...)
+}
+
+func hostHiddenTrees() []string {
+	var trees []string
+	for _, tree := range hostTrees {
+		if info, err := os.Lstat(tree); err == nil && info.IsDir() {
+			trees = append(trees, tree)
+		}
+	}
+	return trees
+}
+
+func (s *sandboxSpec) pathUnderHostTrees() []string {
+	var dirs []string
+	for _, dir := range filepath.SplitList(s.path) {
+		for _, tree := range hostHiddenTrees() {
+			if dir == tree || !underTree(dir, tree) {
+				continue
+			}
+			if base := filepath.Base(dir); (base == "bin" || base == "sbin") && filepath.Dir(dir) != tree {
+				dir = filepath.Dir(dir)
+			}
+			dirs = append(dirs, dir)
+		}
+	}
+	return dedup(dirs)
+}
+
+func sandboxLimits() []string {
+	limitsOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, resourceLimits[0], append(resourceLimits[1:len(resourceLimits):len(resourceLimits)], "/bin/true")...).CombinedOutput()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ghafk: sandboxed runs have no memory or task limits, because systemd-run --user does not work here: %.200s\n", strings.TrimSpace(err.Error()+" "+string(out)))
+			return
+		}
+		limitsPrefix = resourceLimits
+	})
+	return limitsPrefix
 }
 
 func localSocketPath(runDir string, port int) string {

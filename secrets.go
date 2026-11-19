@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -182,26 +184,39 @@ func secretForms(value string) []string {
 }
 
 var secretPatterns = []struct {
-	rule string
-	re   string
+	rule    string
+	re      string
+	bounded bool
 }{
-	{"an Anthropic key", `sk-ant-[A-Za-z0-9_-]{20,}`},
-	{"an OpenAI key", `sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}`},
-	{"an OpenAI key", `sk-[A-Za-z0-9]{20,}T3BlbkFJ[A-Za-z0-9]{20,}`},
-	{"a GitHub token", `gh[pousr]_[A-Za-z0-9]{36,}`},
-	{"a GitHub token", `github_pat_[A-Za-z0-9_]{22,}`},
-	{"an AWS access key", `A(?:KIA|SIA)[0-9A-Z]{16}`},
-	{"a private key", `-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----`},
-	{"a Slack token", `xox[baprs]-[0-9A-Za-z-]{10,}`},
-	{"a Google API key", `AIza[0-9A-Za-z_-]{35}`},
+	{"an Anthropic key", `sk-ant-[A-Za-z0-9_-]{32,}`, false},
+	{"an OpenAI key", `sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{40,}`, false},
+	{"an OpenAI key", `sk-[A-Za-z0-9]{20,}T3BlbkFJ[A-Za-z0-9]{20,}`, false},
+	{"an OpenRouter key", `sk-or-v1-[0-9a-f]{64}`, false},
+	{"a GitHub token", `gh[pousr]_[A-Za-z0-9]{36,}`, false},
+	{"a GitHub token", `github_pat_[A-Za-z0-9_]{22,}`, false},
+	{"a GitLab token", `glpat-[A-Za-z0-9_-]{20,}`, false},
+	{"a Stripe key", `[rs]k_live_[A-Za-z0-9]{24,}`, false},
+	{"an npm token", `npm_[A-Za-z0-9]{36}`, true},
+	{"a Hugging Face token", `hf_[A-Za-z]{34}`, true},
+	{"a Groq key", `gsk_[A-Za-z0-9]{52}`, true},
+	{"a JSON web token", `eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}`, true},
+	{"an Azure storage key", `AccountKey=[A-Za-z0-9+/]{86}==`, false},
+	{"an AWS access key", `A(?:KIA|SIA)[0-9A-Z]{16}`, true},
+	{"a private key", `-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----`, false},
+	{"a Slack token", `xox[baprs]-[0-9A-Za-z-]{10,}`, false},
+	{"a Google API key", `AIza[0-9A-Za-z_-]{35}`, true},
 }
 
 var secretPattern = func() *regexp.Regexp {
 	var alts []string
 	for _, p := range secretPatterns {
-		alts = append(alts, "("+p.re+")")
+		if p.bounded {
+			alts = append(alts, `(?:^|[^A-Za-z0-9+/_-])(`+p.re+")")
+		} else {
+			alts = append(alts, "("+p.re+")")
+		}
 	}
-	return regexp.MustCompile(`(?:^|[^A-Za-z0-9+/_-])(?:` + strings.Join(alts, "|") + `)`)
+	return regexp.MustCompile(strings.Join(alts, "|"))
 }()
 
 type secretMatch struct {
@@ -237,6 +252,39 @@ func redactSecrets(text string) string {
 		text = strings.ReplaceAll(text, m.value, secretPlaceholder)
 	}
 	return text
+}
+
+const redactLineLimit = 64 << 10
+
+type redactingWriter struct {
+	mu      sync.Mutex
+	w       io.Writer
+	pending []byte
+}
+
+func (r *redactingWriter) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pending = append(r.pending, p...)
+	end := bytes.LastIndexByte(r.pending, '\n') + 1
+	if end == 0 && len(r.pending) > redactLineLimit {
+		end = len(r.pending)
+	}
+	if end == 0 {
+		return len(p), nil
+	}
+	_, err := io.WriteString(r.w, redactSecrets(string(r.pending[:end])))
+	r.pending = append(r.pending[:0], r.pending[end:]...)
+	return len(p), err
+}
+
+func (r *redactingWriter) flush() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.pending) > 0 {
+		io.WriteString(r.w, redactSecrets(string(r.pending)))
+		r.pending = nil
+	}
 }
 
 var contentFlags = map[string]bool{"--body": true, "--title": true, "--subject": true}
@@ -340,8 +388,21 @@ func scanChange(work, base string, allow []string) ([]secretHit, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, l := range addedLines(patch) {
+		lines := addedLines(patch)
+		var joined strings.Builder
+		for _, l := range lines {
 			add(fmt.Sprintf("%s line %d", strconv.Quote(path), l.number), path, l.text)
+			joined.WriteString(strings.TrimSpace(l.text))
+		}
+		if len(lines) > 1 {
+			for _, m := range findSecrets(joined.String()) {
+				if m.known {
+					candidates = append(candidates, struct {
+						hit   secretHit
+						match secretMatch
+					}{secretHit{strconv.Quote(path), m.rule}, m})
+				}
+			}
 		}
 	}
 	add("the commit message", "", messages)

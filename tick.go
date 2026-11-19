@@ -28,6 +28,9 @@ func tick() (err error) {
 		return err
 	}
 	defer unlock()
+	if _, ok := installedEngine(); !ok {
+		os.Chmod(filepath.Join(home, ".ghafk"), 0o700)
+	}
 	if stop, logErr := startTickLog(home); logErr == nil {
 		defer stop()
 	} else {
@@ -183,15 +186,40 @@ func workRepo(home, repo, login string, henv harness.Env) error {
 		return parkForApproval(repo, base, login, wf.label, is)
 	}
 	if contractText(is.Comments, login) != "" && !staleAfterContract(is.Comments, login) && !editedSinceGroom(is, st) {
-		if err := runIssue(home, repo, base, login, wf, contractText(is.Comments, login), is); err != nil {
-			return fmt.Errorf("#%d: %w", is.Number, err)
-		}
+		err = runIssue(home, repo, base, login, wf, contractText(is.Comments, login), is)
+	} else {
+		err = groomIssue(home, repo, base, login, wf, is)
+	}
+	return countFailure(home, repo, base, login, wf.label, is, err)
+}
+
+const stuckLimit = 5
+
+func stuckFile(home, repo string, n int) string {
+	return filepath.Join(home, ".ghafk", "stuck", repoSlug(repo)+"-"+strconv.Itoa(n))
+}
+
+func countFailure(home, repo, base, login, label string, is issue, runErr error) error {
+	path := stuckFile(home, repo, is.Number)
+	if runErr == nil {
+		os.Remove(path)
 		return nil
 	}
-	if err := groomIssue(home, repo, base, login, wf, is); err != nil {
-		return fmt.Errorf("#%d: %w", is.Number, err)
+	err := fmt.Errorf("#%d: %w", is.Number, runErr)
+	data, _ := os.ReadFile(path)
+	count, _ := strconv.Atoi(strings.TrimSpace(string(data)))
+	if count++; count < stuckLimit {
+		if os.MkdirAll(filepath.Dir(path), 0o700) == nil {
+			os.WriteFile(path, []byte(strconv.Itoa(count)), 0o600)
+		}
+		return err
 	}
-	return nil
+	os.Remove(path)
+	spec := commentSpec{kind: "park", role: "engine", number: is.Number, sentence: fmt.Sprintf("This issue failed on %d ticks in a row.", stuckLimit), body: fenced(homeRelative(runErr.Error())), footer: retryFooter()}
+	if perr := park(parkPlace{repo: repo, base: base, login: login, label: label, target: strconv.Itoa(is.Number), issue: is.Number, prior: is.Comments}, "failed on every tick", spec); perr != nil {
+		return errors.Join(err, perr)
+	}
+	return err
 }
 
 func tooManyComments(lists ...[]prComment) bool {

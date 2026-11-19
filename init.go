@@ -177,7 +177,7 @@ func addRepo(file, repo string) error {
 			return nil
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 		return err
 	}
 	text := string(data)
